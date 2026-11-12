@@ -1123,6 +1123,9 @@
       }, 450);
     });
     document.addEventListener("mouseleave", hide);
+    // the app's word that the pointer is on the drawing area: this page
+    // never hears it leave
+    window.CB.away = () => { clearTimeout(timer); timer = null; shown = null; };
     document.addEventListener("mousedown", hide, true);
     document.addEventListener("wheel", hide, { passive: true });
   })();

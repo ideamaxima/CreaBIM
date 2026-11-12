@@ -157,7 +157,7 @@ pub struct CreaBimApp {
     /// window) and hasn't come back yet.
     pointer_away: bool,
     /// When the pointer last moved over the drawing area, in seconds.
-    pointer_seen: f64,
+    pub(crate) pointer_seen: f64,
     /// What the area in front showed last frame: a Masters or Profile view
     /// coming forward brings its own Properties tab (MU40).
     prop_front: Option<crate::areas::Shows>,
@@ -328,6 +328,10 @@ pub struct CreaBimApp {
     /// The New project window, with the classic panels.
     new_project_classic: bool,
 }
+
+/// A pointer moving over the drawing area this recently (seconds) can't be
+/// over a bar: a tooltip a bar asks for then is a stale one.
+pub(crate) const TIP_PAUSE: f64 = 0.3;
 
 /// How much of the accent a selected element takes in 3D (A7-2).
 const SELECTION_TINT: f32 = 0.35;
@@ -10990,17 +10994,19 @@ impl eframe::App for CreaBimApp {
             self.close_ask = true;
         }
         let ctx = ui.ctx().clone();
-        // back on the drawing area from a bar: its tooltip goes. A pause in
-        // the pointer's moves here counts as having been away too, in case
-        // leaving onto a pane goes unreported
+        // on the drawing area a bar's tooltip goes: the bar never hears the
+        // pointer leave it. Back from a bar (or after a pause in the moves
+        // here, in case leaving went unreported) the bars forget the
+        // button they last showed, so it shows again on the next hover
         let (events, now) = ctx.input(|i| (i.events.clone(), i.time));
         for e in events {
             match e {
                 egui::Event::PointerGone => self.pointer_away = true,
                 egui::Event::PointerMoved(_) => {
-                    if self.pointer_away || now - self.pointer_seen > 0.3 {
+                    self.shell.drop_web_tip();
+                    if self.pointer_away || now - self.pointer_seen > TIP_PAUSE {
                         if let Some(web) = &self.shell.web {
-                            web.shut_tips();
+                            web.run_all("window.CB && CB.away && CB.away()");
                         }
                     }
                     self.pointer_away = false;
