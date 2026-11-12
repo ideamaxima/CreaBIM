@@ -73,6 +73,9 @@ pub struct MastersUi {
     pub hide_guides: bool,
     /// A field of your own being named, from the Field menu.
     asking_field: Option<String>,
+    /// A master's name as typed in Properties, kept while its field has
+    /// the focus and saved when it loses it.
+    names: std::collections::HashMap<ElementId, String>,
     /// The border picked (its margins in Properties), and an edge being
     /// dragged: (0 left, 1 bottom, 2 right, 3 top; where it is now, mm).
     pub border_sel: bool,
@@ -2152,17 +2155,23 @@ impl CreaBimApp {
         };
         let users = super::drafting::template_users(self.doc.model(), id);
         if self.prop_header(ui, "master_about", "Master", true, None) {
-            let mut n = name.clone();
+            // a draft that outlives the frame: a copy remade each frame
+            // threw away what was typed
+            let draft = self.masters.names.entry(id).or_insert_with(|| name.clone());
             let r = crate::props::row(ui, "Name", |ui| {
                 crate::props::fill(
                     ui,
-                    egui::TextEdit::singleline(&mut n).vertical_align(egui::Align::Center),
+                    egui::TextEdit::singleline(draft)
+                        .vertical_align(egui::Align::Center)
+                        .id(master_name_id(id)),
                 )
             });
-            if r.lost_focus() && !n.trim().is_empty() && n.trim() != name {
-                let new = n.trim().to_string();
+            if r.lost_focus() && !draft.trim().is_empty() && draft.trim() != name {
+                let new = draft.trim().to_string();
                 let res = self.doc.edit(id, "Rename master", |e| e.name = new.clone());
                 self.report(res, format!("Renamed {new}."));
+            } else if !r.has_focus() && *draft != name {
+                *draft = name.clone();
             }
             let size = t.paper.unwrap_or(DVec2::new(420.0, 297.0));
             let now = PAPERS
@@ -2825,6 +2834,11 @@ fn sheet_picture_kind(p: &std::path::Path, w: f64) -> Result<creabim_core::Paper
     })
 }
 
+/// The master name field's id in Properties.
+fn master_name_id(id: ElementId) -> egui::Id {
+    egui::Id::new(("master-name", id))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2860,6 +2874,39 @@ mod tests {
             [Shows::Model, Shows::Masters],
             "the plan stays as it was"
         );
+    }
+
+    #[test]
+    fn a_master_is_renamed_by_typing_in_its_name_field() {
+        // the field was remade from the saved name every frame: what was
+        // typed flickered and was gone, and the name never changed
+        let mut app = crate::app::test_app();
+        app.open_master(None);
+        app.add_master("Studio".into(), tb::minimal_band());
+        let (id, name, _) = app.master().expect("a master to rename");
+        let ctx = egui::Context::default();
+        let frame = |app: &mut CreaBimApp, events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                app.master_props(ui);
+            });
+            out.textures_delta.clear();
+        };
+        frame(&mut app, vec![]);
+        ctx.memory_mut(|m| m.request_focus(master_name_id(id)));
+        frame(&mut app, vec![]);
+        // typed over two frames
+        frame(&mut app, vec![egui::Event::Text("X".into())]);
+        frame(&mut app, vec![egui::Event::Text("Y".into())]);
+        // and left: the name is saved
+        ctx.memory_mut(|m| m.surrender_focus(master_name_id(id)));
+        frame(&mut app, vec![]);
+        let now = app.doc.model().get(id).unwrap().name.clone();
+        assert_ne!(now, name, "the master was renamed");
+        assert!(now.contains("XY"), "{now}");
     }
 
     #[test]
