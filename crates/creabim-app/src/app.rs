@@ -153,6 +153,8 @@ pub struct CreaBimApp {
     close_ask: bool,
     /// The close was settled (saved, or the changes let go): let it through.
     close_ok: bool,
+    /// The window's place, followed to keep it for next time.
+    window: crate::window::Keeper,
     /// What the area in front showed last frame: a Masters or Profile view
     /// coming forward brings its own Properties tab (MU40).
     prop_front: Option<crate::areas::Shows>,
@@ -400,6 +402,7 @@ impl CreaBimApp {
             report_ask: None,
             close_ask: false,
             close_ok: false,
+            window: Default::default(),
             prop_front: None,
             camera: OrbitCamera::default(),
             cube: Default::default(),
@@ -10994,6 +10997,16 @@ impl eframe::App for CreaBimApp {
             ui.ctx()
                 .send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.close_ask = true;
+        }
+        self.window.frame(ui.ctx(), self.shell.settings.window);
+        // closing for good: keep where the window was for next time
+        if ui.ctx().input(|i| i.viewport().close_requested())
+            && (self.close_ok || !self.unsaved())
+            && self.window.now.is_some()
+            && self.shell.settings.window != self.window.now
+        {
+            self.shell.settings.window = self.window.now;
+            self.shell.settings.store();
         }
         let ctx = ui.ctx().clone();
         crate::trace::hold(ctx.input(|i| i.pointer.any_down()));

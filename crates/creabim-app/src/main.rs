@@ -52,6 +52,7 @@ mod ui_model;
 mod units;
 mod viewcube;
 mod webui;
+mod window;
 
 /// The window's and the taskbar's icon: the app tile, sage.
 fn app_icon() -> std::sync::Arc<eframe::egui::IconData> {
@@ -75,11 +76,17 @@ fn main() -> eframe::Result {
     }));
     #[cfg(target_os = "linux")]
     linux_setup();
+    // where it was left last time; the first time, 70% of the screen is
+    // set once the screen is known (window.rs)
+    let viewport = eframe::egui::ViewportBuilder::default()
+        .with_title("CreaBIM")
+        .with_icon(app_icon());
+    let viewport = match files::Settings::load().window {
+        Some([x, y, w, h]) => viewport.with_inner_size([w, h]).with_position([x, y]),
+        None => viewport.with_inner_size([1400.0, 860.0]),
+    };
     let options = eframe::NativeOptions {
-        viewport: eframe::egui::ViewportBuilder::default()
-            .with_title("CreaBIM")
-            .with_inner_size([1400.0, 860.0])
-            .with_icon(app_icon()),
+        viewport,
         renderer: eframe::Renderer::Wgpu,
         #[cfg(target_os = "linux")]
         event_loop_builder: Some(Box::new(|b| {
