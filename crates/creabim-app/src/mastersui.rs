@@ -383,12 +383,15 @@ impl CreaBimApp {
         self.masters.camera = None;
         self.masters.drawing.clear();
         self.prop_tab = PropTab::Master;
-        if !self
-            .areas
-            .root
-            .areas()
-            .contains(&crate::areas::Shows::Masters)
+        // a Masters view already up comes to the front, so Properties
+        // shows the master (not what was picked before)
+        let shows = self.areas.root.areas();
+        if let Some(i) = shows
+            .iter()
+            .position(|s| *s == crate::areas::Shows::Masters)
         {
+            self.areas.focus = i;
+        } else {
             let i = self.areas.focus;
             if let Some(s) = self.areas.root.get_mut(i) {
                 *s = crate::areas::Shows::Masters;
@@ -2825,6 +2828,29 @@ fn sheet_picture_kind(p: &std::path::Path, w: f64) -> Result<creabim_core::Paper
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_master_picked_in_the_browser_brings_its_view_to_the_front() {
+        // with the Masters view beside a plan that had the focus, Properties
+        // kept showing what was picked before (a wall type)
+        use crate::areas::{Node, Shows};
+        let mut app = crate::app::test_app();
+        app.areas.root = Node::split(
+            false,
+            0.5,
+            Node::Area(Shows::Model),
+            Node::Area(Shows::Masters),
+        );
+        app.areas.focus = 0;
+        app.open_master(None);
+        assert_eq!(app.areas.focus, 1, "the Masters view is in front");
+        assert!(app.prop_tabs().contains(&PropTab::Master));
+        assert_eq!(
+            app.areas.root.areas(),
+            [Shows::Model, Shows::Masters],
+            "the plan stays as it was"
+        );
+    }
 
     #[test]
     fn text_shapes_and_pictures_are_picked_near_or_in_them() {
