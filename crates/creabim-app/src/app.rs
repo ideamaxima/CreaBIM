@@ -155,6 +155,11 @@ pub struct CreaBimApp {
     close_ok: bool,
     /// The window's place, followed to keep it for next time.
     window: crate::window::Keeper,
+    /// The pointer left the drawing area (onto a web pane, or out of the
+    /// window) and hasn't come back yet.
+    pointer_away: bool,
+    /// When the pointer last moved over the drawing area, in seconds.
+    pointer_seen: f64,
     /// What the area in front showed last frame: a Masters or Profile view
     /// coming forward brings its own Properties tab (MU40).
     prop_front: Option<crate::areas::Shows>,
@@ -403,6 +408,8 @@ impl CreaBimApp {
             close_ask: false,
             close_ok: false,
             window: Default::default(),
+            pointer_away: true,
+            pointer_seen: 0.0,
             prop_front: None,
             camera: OrbitCamera::default(),
             cube: Default::default(),
@@ -11009,6 +11016,25 @@ impl eframe::App for CreaBimApp {
             self.shell.settings.store();
         }
         let ctx = ui.ctx().clone();
+        // back on the drawing area from a bar: its tooltip goes. A pause in
+        // the pointer's moves here counts as having been away too, in case
+        // leaving onto a pane goes unreported
+        let (events, now) = ctx.input(|i| (i.events.clone(), i.time));
+        for e in events {
+            match e {
+                egui::Event::PointerGone => self.pointer_away = true,
+                egui::Event::PointerMoved(_) => {
+                    if self.pointer_away || now - self.pointer_seen > 0.3 {
+                        if let Some(web) = &self.shell.web {
+                            web.shut_tips();
+                        }
+                    }
+                    self.pointer_away = false;
+                    self.pointer_seen = now;
+                }
+                _ => {}
+            }
+        }
         crate::trace::hold(ctx.input(|i| i.pointer.any_down()));
         let m = ctx.input(|i| i.modifiers);
         shell::MODS.store(
