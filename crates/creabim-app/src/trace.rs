@@ -263,7 +263,8 @@ pub fn picture(path: &str) -> Result<Raster, String> {
 
 /// A DXF file's lines, in metres.
 pub fn dxf_lines(path: &str) -> Result<Vec<Vec<DVec2>>, String> {
-    let text = std::fs::read_to_string(path).map_err(|e| format!("couldn't read {path}: {e}"))?;
+    let bytes = std::fs::read(path).map_err(|e| format!("couldn't read {path}: {e}"))?;
+    let text = creabim_exchange::titleblock::dxf_text(&bytes);
     let items = creabim_exchange::titleblock::dxf_items(&text)?;
     Ok(items
         .into_iter()
