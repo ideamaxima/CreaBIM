@@ -216,6 +216,24 @@ impl WebUi {
         let _ = self.view(pane).evaluate_script(script);
     }
 
+    /// Close the tooltips the pages left open. A pane is a GTK child window:
+    /// when the pointer goes from it onto the drawing area the page never
+    /// hears it leave, and a button's tooltip stayed over the view.
+    pub fn shut_tips(&self) {
+        #[cfg(target_os = "linux")]
+        {
+            use gtk::prelude::WidgetExt;
+            use wry::WebViewExtUnix;
+            for (_, v) in &self.views {
+                let w = v.webview();
+                if w.has_tooltip() {
+                    w.set_has_tooltip(false);
+                    w.set_has_tooltip(true);
+                }
+            }
+        }
+    }
+
     /// Re-send every state next frame (after a page reloads).
     pub fn resend(&mut self, pane: Pane) {
         self.sent[pane as usize].clear();
