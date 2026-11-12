@@ -8461,6 +8461,15 @@ impl CreaBimApp {
             self.crop_pick_banner(ui);
         }
         let tab = self.prop_tab;
+        // a master, a profile or the log: not the element picked before
+        if tab.of_its_view() {
+            match tab {
+                PropTab::Profile => self.profile_props(ui),
+                PropTab::Master => self.master_props(ui),
+                _ => self.log_props(ui),
+            }
+            return;
+        }
         let Some(id) = self.selection.active else {
             if tab == PropTab::Next {
                 self.next_element_panel(ui);
@@ -8472,18 +8481,6 @@ impl CreaBimApp {
             }
             if tab == PropTab::Notes {
                 self.notes_pad(ui);
-                return;
-            }
-            if tab == PropTab::Profile {
-                self.profile_props(ui);
-                return;
-            }
-            if tab == PropTab::Master {
-                self.master_props(ui);
-                return;
-            }
-            if tab == PropTab::Log {
-                self.log_props(ui);
                 return;
             }
             if tab == PropTab::Model3d {
@@ -10114,7 +10111,11 @@ impl CreaBimApp {
     /// The top of Properties, pinned while its tabs scroll (MU19/MU20):
     /// what the selected element is, its name and mark, and its actions.
     fn properties_header(&mut self, ui: &mut egui::Ui) {
-        let Some(id) = self.selection.active else {
+        let picked = self
+            .selection
+            .active
+            .filter(|_| !self.prop_tab.of_its_view());
+        let Some(id) = picked else {
             // the open tab's name, as Blender's context line
             crate::props::flow(ui, |ui| {
                 let p = crate::theme::Palette::of(ui.ctx());
@@ -10813,6 +10814,12 @@ pub(crate) enum PropTab {
 }
 
 impl PropTab {
+    /// A tab of the view in front (a master, a profile, the log): it shows
+    /// what that view edits, whatever is picked in the model.
+    pub(crate) fn of_its_view(self) -> bool {
+        matches!(self, PropTab::Master | PropTab::Profile | PropTab::Log)
+    }
+
     /// The strip's groups, a hairline apart: what is selected, the view,
     /// the whole project.
     fn group(self) -> u8 {

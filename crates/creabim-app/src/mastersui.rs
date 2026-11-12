@@ -2845,6 +2845,16 @@ mod tests {
         app.open_master(None);
         assert_eq!(app.areas.focus, 1, "the Masters view is in front");
         assert!(app.prop_tabs().contains(&PropTab::Master));
+        // and the master shows, though a wall is still picked
+        let wall = app
+            .doc
+            .model()
+            .iter()
+            .find(|e| matches!(e.kind, creabim_core::ElementKind::Wall(_)))
+            .map(|e| e.id);
+        app.selection.set(wall);
+        assert!(app.selection.active.is_some());
+        assert!(PropTab::Master.of_its_view());
         assert_eq!(
             app.areas.root.areas(),
             [Shows::Model, Shows::Masters],
