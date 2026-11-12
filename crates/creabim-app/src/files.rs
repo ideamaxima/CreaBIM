@@ -197,6 +197,9 @@ pub struct Settings {
     pub render_3d: crate::render3d::RenderMode,
     /// Width of the Help panel, in points.
     pub help_width: f32,
+    /// Where the window was when CreaBIM last closed: x, y, width,
+    /// height in points. None opens it at 70% of the screen.
+    pub window: Option<crate::window::Place>,
     /// Which sections of Properties are open, by key, where it differs
     /// from how each opens at first.
     #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
@@ -255,6 +258,7 @@ impl Default for Settings {
             guides_hidden: false,
             render_3d: Default::default(),
             help_width: 400.0,
+            window: None,
             props_open: Default::default(),
             tools_tab: 0,
             workspace: "Drawing".into(),
