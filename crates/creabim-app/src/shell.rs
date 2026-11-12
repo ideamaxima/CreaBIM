@@ -81,6 +81,11 @@ impl Default for Shell {
 }
 
 impl Shell {
+    /// Take a bar's tooltip away (MU26).
+    pub fn drop_web_tip(&mut self) {
+        self.web_tip = None;
+    }
+
     /// Feed the keys pressed while a page had the keyboard to the views.
     /// egui keeps Ctrl, Shift and Alt from `ModifiersChanged` events, not
     /// from each key, and the window saw none of them go down while the
@@ -3854,7 +3859,11 @@ impl CreaBimApp {
             "tip" => {
                 // a web row's hint, drawn by the app in its theme (MU26)
                 let text = b["text"].as_str().unwrap_or("").trim().to_string();
-                self.shell.web_tip = match (&self.shell.web, text.is_empty()) {
+                // asked for while the pointer moves over the drawing area: a
+                // bar redrawn under where it last saw the pointer
+                let now = ctx.input(|i| i.time);
+                let stale = now - self.pointer_seen < crate::app::TIP_PAUSE;
+                self.shell.web_tip = match (&self.shell.web, text.is_empty() || stale) {
                     (Some(web), false) => {
                         let o = web.rects[msg.pane as usize].min;
                         let f = |k: &str| b[k].as_f64().unwrap_or(0.0) as f32;
