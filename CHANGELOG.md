@@ -58,6 +58,9 @@ Issue and pull request numbers refer to the upstream repository.
   large it was left.
 
 ### Fixed
+- The view bar's Grid button turns the grid behind drawings off and on
+  again, and a sheet's Picture button opens the picture dialog: both did
+  nothing.
 - Levels window: changing a storey's Height no longer pushes its row down
   (the Fit button sits beside the gap; Duplicate and Delete stay on one
   line).
