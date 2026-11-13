@@ -1172,7 +1172,12 @@ impl CreaBimApp {
                         0,
                         &mut ask,
                     );
-                    if ui.small_button("Manage sets…").clicked() {
+                    ui.add_space(3.0);
+                    if crate::props::row(ui, "", |ui| {
+                        ui.button("Manage sets…")
+                            .on_hover_text("Make, rename, move and delete sets and folders")
+                            .clicked()
+                    }) {
                         extra = Some("sets");
                     }
                     if let Some((ids, hide)) = ask {
