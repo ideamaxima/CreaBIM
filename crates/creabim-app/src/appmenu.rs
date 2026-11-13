@@ -1063,6 +1063,19 @@ mod tests {
         assert_eq!(app.path, "House in its garden.creabim");
         app.run_action(&ctx, "new.empty");
         assert_eq!(app.path, "Untitled.creabim");
+        // left as it came, it closes without asking; changed, it asks
+        assert!(!app.unsaved());
+        let lvl = app.doc.model().levels().next().unwrap().0.id;
+        let tx = creabim_core::Transaction::new("rename").replace(
+            app.doc.model().get(lvl).unwrap().clone(),
+            {
+                let mut e = app.doc.model().get(lvl).unwrap().clone();
+                e.name = "Ground".into();
+                e
+            },
+        );
+        app.doc.commit(tx).unwrap();
+        assert!(app.unsaved());
         assert_eq!(app.doc.model().levels().count(), 2);
         // one New project… in the File menu, the samples under Help
         let file: Vec<String> = app

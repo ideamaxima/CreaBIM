@@ -521,6 +521,8 @@ impl CreaBimApp {
         self.geometry_key = None;
         self.drop_stale_selection();
         self.frame_all();
+        // a new project or sample left as it came closes without asking
+        self.saved_revision = Some(self.doc.model().revision());
     }
 
     /// Open a project file, or import and link any other file.
@@ -555,6 +557,8 @@ impl CreaBimApp {
                     }
                     self.import_report = Some(report);
                     self.load_model(imported.model);
+                    // not kept as a project yet: closing asks
+                    self.saved_revision = None;
                     self.restore_areas(None);
                     self.watch = Default::default();
                     self.recent.add(path);
