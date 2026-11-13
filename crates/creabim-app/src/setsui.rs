@@ -67,14 +67,14 @@ impl CreaBimApp {
             let r = ui.add_sized(
                 [220.0, 20.0],
                 egui::TextEdit::singleline(&mut self.sets.new_name)
-                    .hint_text("New set (Folder/Name)")
+                    .hint_text("New set name")
                     .vertical_align(egui::Align::Center),
             );
             let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             let name = self.sets.new_name.trim().to_string();
             if (ui
                 .add_enabled(!name.is_empty(), egui::Button::new("Add set"))
-                .on_hover_text("A \"/\" in the name puts it in a folder")
+                .on_hover_text("To put it in a folder, start the name with the folder and a \"/\": Phase 1/Temporary")
                 .clicked()
                 || enter)
                 && !name.is_empty()
@@ -147,7 +147,7 @@ impl CreaBimApp {
                                 *draft = name.to_string();
                             }
                             ui.label(sets::uses(model, id).0.to_string());
-                            crate::props::flow(ui, |ui| {
+                            ui.horizontal(|ui| {
                                 if ui
                                     .add_enabled(picked > 0, egui::Button::new("Add").small())
                                     .on_hover_text("Put the selected elements in this set")
@@ -165,7 +165,7 @@ impl CreaBimApp {
                             });
                             if self.sets.delete == Some(id) {
                                 let (n, v) = sets::uses(model, id);
-                                crate::props::flow(ui, |ui| {
+                                ui.horizontal(|ui| {
                                     ui.label(format!("{n} elements, {v} views."));
                                     if ui.small_button("Delete").clicked() {
                                         asks.push(Ask::ConfirmDelete(id));
