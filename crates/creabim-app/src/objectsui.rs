@@ -29,6 +29,9 @@ pub(super) struct CatalogueUi {
     save_name: String,
     /// The height typed for an object made from a DXF drawing.
     dxf_height: String,
+    /// How tall the buttons under the list were last drawn: the list
+    /// leaves them that much room, however they wrap.
+    bottom: f32,
 }
 
 /// What a click in the window asks for.
@@ -798,7 +801,7 @@ impl CreaBimApp {
                         ui.add(egui::Label::new(egui::RichText::new(&c.name).size(11.5)).wrap());
                     });
                 };
-                let bottom = 118.0;
+                let bottom = cat.bottom.max(118.0);
                 egui::ScrollArea::vertical()
                     .id_salt("catalogue_items")
                     .max_height((ui.available_height() - bottom).max(160.0))
@@ -841,6 +844,7 @@ impl CreaBimApp {
                             ui.add_space(6.0);
                         }
                     });
+                let below = ui.cursor().min.y;
                 ui.separator();
                 crate::props::flow(ui, |ui| {
                     if ui
@@ -904,6 +908,7 @@ impl CreaBimApp {
                     )
                     .weak(),
                 );
+                cat.bottom = ui.cursor().min.y - below + 8.0;
             });
         self.catalogue.open = open;
         for a in asks {
