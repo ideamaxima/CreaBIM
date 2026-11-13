@@ -22,6 +22,8 @@ pub(super) struct SetsUi {
     delete: Option<ElementId>,
     /// Folders closed in the tree.
     closed: HashSet<ElementId>,
+    /// The folder the Sets menu makes new sets in; none: the top.
+    menu_folder: Option<ElementId>,
 }
 
 /// What a click asks for, done once the window or menu is drawn.
@@ -29,7 +31,7 @@ pub(super) enum Ask {
     /// A new set (or folder, when true) named so, in a folder.
     New(String, bool, Option<ElementId>),
     /// A new set holding the selection.
-    NewFromSelection(String),
+    NewFromSelection(String, Option<ElementId>),
     Manage,
     Rename(ElementId, String),
     Assign(ElementId, bool),
@@ -209,6 +211,37 @@ impl CreaBimApp {
             ui.separator();
         }
         ui.label("New set from selection");
+        // the folder it goes in, kept for next time while it exists
+        if self.sets.menu_folder.is_some_and(|f| {
+            !matches!(
+                model.get(f).map(|e| &e.kind),
+                Some(ElementKind::SetFolder(_))
+            )
+        }) {
+            self.sets.menu_folder = None;
+        }
+        let mut folders: Vec<(ElementId, String)> = model
+            .iter()
+            .filter(|e| matches!(e.kind, ElementKind::SetFolder(_)))
+            .map(|e| (e.id, sets::path(model, e.id)))
+            .collect();
+        folders.sort_by(|a, b| a.1.cmp(&b.1));
+        let shown = match self.sets.menu_folder {
+            Some(f) => sets::path(model, f),
+            None => "Top (no folder)".into(),
+        };
+        ui.horizontal(|ui| {
+            ui.label("In");
+            egui::ComboBox::from_id_salt("sets-menu-folder")
+                .selected_text(shown)
+                .width(180.0)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.sets.menu_folder, None, "Top (no folder)");
+                    for (f, p) in &folders {
+                        ui.selectable_value(&mut self.sets.menu_folder, Some(*f), p);
+                    }
+                });
+        });
         ui.horizontal(|ui| {
             let r = ui.add(
                 egui::TextEdit::singleline(&mut self.sets.new_name)
@@ -218,12 +251,12 @@ impl CreaBimApp {
             let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             let name = self.sets.new_name.trim().to_string();
             if (ui
-                .add_enabled(!name.is_empty(), egui::Button::new("Make"))
+                .add_enabled(!name.is_empty(), egui::Button::new("New set"))
                 .clicked()
                 || enter)
                 && !name.is_empty()
             {
-                asks.push(Ask::NewFromSelection(name));
+                asks.push(Ask::NewFromSelection(name, self.sets.menu_folder));
             }
         });
         ui.separator();
@@ -253,8 +286,14 @@ impl CreaBimApp {
                 }
                 self.report(r, format!("{label} {name} made."));
             }
-            Ask::NewFromSelection(name) => {
-                let e = sets::new_set(&name);
+            Ask::NewFromSelection(name, folder) => {
+                let mut e = sets::new_set(&name);
+                if let ElementKind::Set(s) = &mut e.kind {
+                    s.folder = folder;
+                }
+                if let Some(f) = folder {
+                    self.sets.closed.remove(&f);
+                }
                 let id = e.id;
                 let tx = Transaction::new("New set from selection").insert(e);
                 let mut m = self.doc.model().clone();
