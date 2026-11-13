@@ -735,7 +735,7 @@ impl CreaBimApp {
             }
             _ => {
                 let w = 3.0 * thumb + 24.0;
-                (w, egui::pos2(area.max.x - w - 16.0, area.min.y + 64.0))
+                (w, egui::pos2(area.max.x - w - 16.0, area.min.y + 16.0))
             }
         };
         crate::app::shell::window("Catalogue")
@@ -743,7 +743,9 @@ impl CreaBimApp {
             .open(&mut open)
             .default_pos(pos)
             .constrain_to(area)
-            .default_size([width, (area.height() - 90.0).clamp(360.0, 640.0)])
+            // nearly the app's full height, down to a margin above its
+            // bottom edge (the title bar and frame taken off)
+            .default_size([width, (area.max.y - pos.y - 56.0).max(360.0)])
             .collapsible(false)
             .show(ctx, |ui| {
                 let cat = &mut self.catalogue;
