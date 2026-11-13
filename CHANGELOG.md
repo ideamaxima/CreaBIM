@@ -9,8 +9,8 @@ Issue and pull request numbers refer to the upstream repository.
 ## [Unreleased]
 
 ### Changed
-- The Catalogue window opens nearly the app's full height, its buttons
-  always in sight below the list however they wrap.
+- The Catalogue window opens tall, just below the view's header and well
+  above the bottom, its buttons always in sight below the list.
 - Imported objects tell what they are from names with figures ("WC01")
   and from Italian names too (vaso, lavabo, doccia, letto, armadio…).
 - Sets window: combinations on top, always in sight; the list of sets
