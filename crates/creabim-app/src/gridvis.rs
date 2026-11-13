@@ -478,6 +478,10 @@ impl CreaBimApp {
                 );
             }
         }
+        if let Some(sub) = sets_sub(model, &h, p) {
+            items.push(Item::Separator);
+            items.push(sub);
+        }
         let hidden: Vec<&Element> = h.elements.iter().filter_map(|id| model.get(*id)).collect();
         if !hidden.is_empty() {
             items.push(Item::Separator);
@@ -756,6 +760,31 @@ impl CreaBimApp {
                             };
                             self.set_view_hidden(t, label, |h| h.set_grid_group(g, hide));
                         }
+                    }
+                    "set" => {
+                        if let Some(set) = id {
+                            let hide = !h.sets.contains(&set);
+                            let label = if hide { "Hide set" } else { "Show set" };
+                            self.set_view_hidden(t, label, |h| h.set_set(set, hide));
+                        }
+                    }
+                    // a folder's sets, or every set when the folder is none
+                    "setdir" => {
+                        let model = self.doc.model();
+                        let list: Vec<ElementId> = match id {
+                            Some(f) => creabim_core::sets::sets_under(model, f),
+                            None => creabim_core::sets::sets(model)
+                                .into_iter()
+                                .map(|(s, _)| s)
+                                .collect(),
+                        };
+                        let hide = list.iter().all(|s| !h.sets.contains(s));
+                        let label = if hide { "Hide sets" } else { "Show sets" };
+                        self.set_view_hidden(t, label, |h| {
+                            for s in list {
+                                h.set_set(s, hide);
+                            }
+                        });
                     }
                     "unhide" => {
                         if let Some(e) = id {
@@ -1598,6 +1627,67 @@ pub(super) fn shows_in_3d(kind: &ElementKind) -> bool {
             | ElementKind::Project(_)
             | ElementKind::ElementType(_)
     )
+}
+
+/// The "Sets ▸" submenu of a Visibility menu: a switch for all of them,
+/// then the folders as submenus (each with a switch for all it holds) and
+/// the sets with their ticks. None when the project has no sets.
+fn sets_sub(model: &creabim_core::Model, h: &ViewHidden, p: &str) -> Option<Item> {
+    use creabim_core::sets;
+    let all = sets::sets(model);
+    if all.is_empty() {
+        return None;
+    }
+    fn level(
+        model: &creabim_core::Model,
+        h: &ViewHidden,
+        p: &str,
+        folder: Option<ElementId>,
+        out: &mut Vec<Item>,
+    ) {
+        let (folders, set_ids) = sets::children(model, folder);
+        for f in folders {
+            let Some(e) = model.get(f) else { continue };
+            let under = sets::sets_under(model, f);
+            let mut inner = vec![
+                Item::new(format!("{p}.setdir:{}", f.0), "All in this folder")
+                    .checked(!under.is_empty() && under.iter().all(|s| !h.sets.contains(s)))
+                    .enabled(!under.is_empty())
+                    .keep_open(),
+            ];
+            inner.push(Item::Separator);
+            level(model, h, p, Some(f), &mut inner);
+            out.push(Item::Sub {
+                label: e.name.clone(),
+                enabled: true,
+                items: inner,
+                icon: "folder",
+            });
+        }
+        for s in set_ids {
+            let Some(e) = model.get(s) else { continue };
+            out.push(
+                Item::new(format!("{p}.set:{}", s.0), &e.name)
+                    .checked(!h.sets.contains(&s))
+                    .keep_open(),
+            );
+        }
+    }
+    let mut items = vec![
+        Item::new(format!("{p}.setdir:"), "All sets")
+            .checked(all.iter().all(|(s, _)| !h.sets.contains(s)))
+            .keep_open(),
+        Item::Separator,
+    ];
+    level(model, h, p, None, &mut items);
+    items.push(Item::Separator);
+    items.push(Item::new("sets", "Manage sets…").icon("layers"));
+    Some(Item::Sub {
+        label: "Sets".into(),
+        enabled: true,
+        items,
+        icon: "layers",
+    })
 }
 
 #[cfg(test)]

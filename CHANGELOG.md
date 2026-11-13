@@ -9,6 +9,13 @@ Issue and pull request numbers refer to the upstream repository.
 ## [Unreleased]
 
 ### Added
+- Sets: your own groups of elements, of any category (a wall, a slab and a
+  chair can share one), like layers. An element can be in several sets; a
+  view leaves it out when any of them is switched off there. Make, rename,
+  organise in folders, select, isolate, duplicate, merge and delete them in
+  Manage → Sets; put the selection in them from the Sets button of the
+  element action bar; switch them on and off from the view's Visibility
+  menu (Sets ▸). Views, sheets and view templates keep what they switch off.
 - The window opens at 70% of the screen the first time, then where and how
   large it was left.
 

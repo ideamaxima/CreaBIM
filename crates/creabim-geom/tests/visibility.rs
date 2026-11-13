@@ -173,3 +173,56 @@ fn views_showing_hidden_elements_draw_a_beam_inside_a_wall_dashed() {
         assert_eq!(hidden_lines_of(&m, plan, o), 0);
     }
 }
+
+#[test]
+fn plans_and_sections_leave_out_the_elements_of_sets_switched_off() {
+    let mut m = sample::sample_house();
+    let set = sets::new_set("Temporary");
+    Transaction::new("set")
+        .insert(set.clone())
+        .apply(&mut m)
+        .unwrap();
+    let walls = of_kind(&m, |k| matches!(k, ElementKind::Wall(_)));
+    let slabs = of_kind(&m, |k| matches!(k, ElementKind::Slab(_)));
+    // a wall and a slab, two categories, in one set
+    let (wall, slab) = (walls[0], slabs[0]);
+    sets::assign(&m, set.id, &[wall, slab], true)
+        .apply(&mut m)
+        .unwrap();
+    let views: Vec<ElementId> = m
+        .iter()
+        .filter(|e| {
+            matches!(&e.kind, ElementKind::View(v)
+                if matches!(v.kind, ViewKind::Plan { .. } | ViewKind::Section { .. }))
+        })
+        .map(|e| e.id)
+        .collect();
+    let mut checked = 0;
+    for view in views {
+        let before = ids(&m, view);
+        if !before.contains(&wall) {
+            continue;
+        }
+        let mut off = m.clone();
+        let e = off.get(view).unwrap().clone();
+        let mut after = e.clone();
+        if let ElementKind::View(v) = &mut after.kind {
+            v.hidden.set_set(set.id, true);
+        }
+        Transaction::new("off")
+            .replace(e, after)
+            .apply(&mut off)
+            .unwrap();
+        let shown = ids(&off, view);
+        assert!(!shown.contains(&wall) && !shown.contains(&slab));
+        for d in off.dependents(wall) {
+            assert!(!shown.contains(&d), "the wall's doors and windows go too");
+        }
+        assert!(
+            walls[1..].iter().any(|w| shown.contains(w)),
+            "other walls stay"
+        );
+        checked += 1;
+    }
+    assert!(checked > 0);
+}
