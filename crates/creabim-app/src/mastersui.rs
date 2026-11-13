@@ -1460,9 +1460,16 @@ impl CreaBimApp {
                         };
                         let p = to_s(o + *at);
                         let top_left = p + rot(egui::vec2(-dx, -sz.y / 2.0));
-                        if a == 0.0 {
-                            text_rects.push((idx, Rect::from_min_size(top_left, sz)));
-                        }
+                        // the box round the letters as drawn, turned or not:
+                        // a guess from the letter count fell short of capitals
+                        let corners = [
+                            egui::vec2(0.0, 0.0),
+                            egui::vec2(sz.x, 0.0),
+                            egui::vec2(sz.x, sz.y),
+                            egui::vec2(0.0, sz.y),
+                        ]
+                        .map(|v| top_left + rot(v));
+                        text_rects.push((idx, Rect::from_points(&corners)));
                         // a field is a chip: what each sheet fills in
                         if field && a == 0.0 {
                             painter.rect_filled(
