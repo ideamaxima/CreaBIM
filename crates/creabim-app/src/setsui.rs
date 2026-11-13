@@ -60,6 +60,7 @@ pub(super) enum Ask {
     UpdateCombination(ElementId),
     /// A copy of the active view following this combination.
     ViewFromCombination(ElementId),
+    DuplicateCombination(ElementId),
 }
 
 /// What the tree rows need to read, gathered before they draw.
@@ -516,7 +517,7 @@ impl CreaBimApp {
                 let tx = sets::apply_combination(self.doc.model(), id, view);
                 let r = self.doc.commit(tx);
                 self.hidden_rev += 1;
-                self.report(r, "This view follows the combination.");
+                self.report(r, "Combination used in this view.");
             }
             Ask::UpdateCombination(id) => {
                 let Some(gridvis::VisTarget::View(view)) = self.vis_target(false) else {
@@ -527,6 +528,18 @@ impl CreaBimApp {
                 self.hidden_rev += 1;
                 let n = sets::combination_views(self.doc.model(), id).len();
                 self.report(r, format!("Combination updated; {n} views follow it."));
+            }
+            Ask::DuplicateCombination(id) => {
+                if let Some((tx, new)) = sets::duplicate_combination(self.doc.model(), id) {
+                    let r = self.doc.commit(tx);
+                    let name = self
+                        .doc
+                        .model()
+                        .get(new)
+                        .map(|e| e.name.clone())
+                        .unwrap_or_default();
+                    self.report(r, format!("Combination duplicated as {name}."));
+                }
             }
             Ask::ViewFromCombination(id) => {
                 let Some(gridvis::VisTarget::View(view)) = self.vis_target(false) else {
@@ -559,16 +572,8 @@ fn combinations_section(
     asks: &mut Vec<Ask>,
 ) {
     let live = view.is_some();
-    ui.horizontal(|ui| {
-        ui.label(egui::RichText::new("Combinations").strong());
-        if let Some(v) = view {
-            let now = match hidden.combination.and_then(|c| model.get(c)) {
-                Some(c) => format!("{v} follows {}", c.name),
-                None => format!("{v}: Custom"),
-            };
-            ui.label(egui::RichText::new(now).weak());
-        }
-    });
+    let modified = sets::modified(model, hidden);
+    ui.label(egui::RichText::new("Combinations").strong());
     ui.add_enabled_ui(live, |ui| {
         ui.horizontal(|ui| {
             let r = ui.add_sized(
@@ -595,58 +600,64 @@ fn combinations_section(
         ui.label(egui::RichText::new("Open a plan or section to use combinations.").weak());
     }
     for (id, name) in sets::combinations(model) {
+        let on = hidden.combination == Some(id);
         ui.horizontal(|ui| {
             ui.add_space(INDENT);
+            if ui
+                .add_enabled(live, egui::RadioButton::new(on, ""))
+                .on_hover_text("Use it in this view")
+                .clicked()
+            {
+                asks.push(Ask::ApplyCombination(id));
+            }
             name_field(ui, st, id, name, asks);
+            if on && modified {
+                ui.label(egui::RichText::new("(modified)").italics());
+            }
             let views = sets::combination_views(model, id);
-            let r = ui.label(egui::RichText::new(match views.len() {
-                1 => "1 view".to_string(),
-                n => format!("{n} views"),
-            })
-            .weak());
+            let r = ui.label(
+                egui::RichText::new(match views.len() {
+                    1 => "1 view".to_string(),
+                    n => format!("{n} views"),
+                })
+                .weak(),
+            );
             if !views.is_empty() {
                 r.on_hover_text(views.join(", "));
             }
             ui.add_enabled_ui(live, |ui| {
                 if ui
+                    .add_enabled(on && modified, egui::Button::new("Update"))
+                    .on_hover_text(
+                        "The combination takes this view's sets; the views using it change too",
+                    )
+                    .clicked()
+                {
+                    asks.push(Ask::UpdateCombination(id));
+                }
+                if ui
                     .button("New view")
                     .on_hover_text(
-                        "A copy of this view following the combination; this view stays as it is",
+                        "A copy of this view using the combination; this view stays as it is",
                     )
                     .clicked()
                 {
                     asks.push(Ask::ViewFromCombination(id));
                 }
-                let more = icon_button(ui, "ellipsis", "More");
-                egui::Popup::menu(&more).show(|ui| {
-                    if ui
-                        .button("Apply to this view")
-                        .on_hover_text("This view follows the combination")
-                        .clicked()
-                    {
-                        asks.push(Ask::ApplyCombination(id));
-                    }
-                    if ui
-                        .button("Update from this view")
-                        .on_hover_text(
-                            "The combination takes this view's sets; every view following it changes",
-                        )
-                        .clicked()
-                    {
-                        asks.push(Ask::UpdateCombination(id));
-                    }
-                    if ui.button("Delete").clicked() {
-                        asks.push(Ask::Delete(id));
-                    }
-                });
             });
-            delete_question(
-                ui,
-                st,
-                id,
-                format!("Delete {name}? Its {} views keep their sets.", views.len()),
-                asks,
-            );
+            let more = icon_button(ui, "ellipsis", "More");
+            egui::Popup::menu(&more).show(|ui| {
+                if ui.button("Duplicate").clicked() {
+                    asks.push(Ask::DuplicateCombination(id));
+                }
+                if ui
+                    .button("Delete")
+                    .on_hover_text("The views using it keep their sets")
+                    .clicked()
+                {
+                    asks.push(Ask::ConfirmDelete(id));
+                }
+            });
         });
     }
 }

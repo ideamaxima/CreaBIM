@@ -10,10 +10,11 @@ Issue and pull request numbers refer to the upstream repository.
 
 ### Added
 - Combinations of sets, like ArchiCAD's layer combinations: in the Sets
-  window, save which sets are on and off in a view under a name. *New view*
-  copies the open view to follow it, leaving the view you work on whole;
-  update a combination and every view following it changes. Switching a set
-  by hand in a view lets go of its combination (shown as *Custom*).
+  window, save which sets are on and off in a view under a name, and pick
+  one for the open view with its radio button. Switching sets by hand marks
+  it *modified*; *Update* stores the change, and the views using it follow.
+  *New view* copies the open view with a combination, leaving the view you
+  work on whole. Duplicate and delete them from the ⋯ menu.
 - Sets: your own groups of elements, of any category (a wall, a slab and a
   chair can share one), like layers. An element can be in several sets; a
   view leaves it out when any of them is switched off there. Make, rename,
