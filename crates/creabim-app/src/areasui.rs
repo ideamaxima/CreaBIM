@@ -442,9 +442,7 @@ impl CreaBimApp {
                 .or(current),
         };
         self.areas.seen = self.active_view;
-        if let Some(v) = self.active_view {
-            self.note_view_open(v);
-        }
+        self.note_views_open();
         // the area under the pointer is outlined: keys and tools act there
         if n > 1 {
             if let Some(r) = self.areas.hovered.and_then(|h| rects.get(h)) {
@@ -924,12 +922,16 @@ impl CreaBimApp {
     }
 
     /// The group a view is listed in ("Floor plans", "Sheets"…).
-    /// `v` is the view open now: the last of its group, and the last
-    /// drawing when it is not a sheet.
-    pub(super) fn note_view_open(&mut self, v: ElementId) {
-        if !self.is_sheet(v) {
+    /// Keep what is open now: the last drawing, and the last view of its
+    /// group, from the area worked in only. Another area's view, which
+    /// becomes the active one while that area shows 3D, is not one picked.
+    pub(super) fn note_views_open(&mut self) {
+        if let Some(v) = self.active_view.filter(|v| !self.is_sheet(*v)) {
             self.areas.drawing = Some(v);
         }
+        let Some(Shows::View(v)) = self.areas.root.areas().get(self.areas.focus).copied() else {
+            return;
+        };
         let g = self.group_title(v);
         if self.areas.last_in_group.get(g) != Some(&v) {
             self.areas.last_in_group.insert(g, v);
@@ -1689,8 +1691,23 @@ mod tests {
         };
         // nothing seen yet: the first plan
         assert_eq!(item_for(&app), format!("area.show:{}", plans[0].0));
-        // the second plan was open, then the area showed 3D: back to it
-        app.note_view_open(plans[1]);
+        // two areas: the one worked in shows the second plan, the other
+        // the first
+        app.areas.root = Node::split(
+            true,
+            0.5,
+            Node::Area(Shows::View(plans[1])),
+            Node::Area(Shows::View(plans[0])),
+        );
+        app.areas.focus = 0;
+        app.active_view = Some(plans[1]);
+        app.note_views_open();
+        assert_eq!(item_for(&app), format!("area.show:{}", plans[1].0));
+        // it switches to 3D: the other area's plan becomes the active view,
+        // but not the plan to come back to
+        assert!(app.area_action("area.show", "model"));
+        app.active_view = Some(plans[0]);
+        app.note_views_open();
         assert_eq!(item_for(&app), format!("area.show:{}", plans[1].0));
     }
 
