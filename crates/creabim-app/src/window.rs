@@ -37,11 +37,33 @@ pub fn fits(p: Place, monitor: Vec2) -> bool {
         && y < monitor.y - reach
 }
 
+/// The largest gap between where the window was asked to open and where
+/// the system put it that is taken for the system's own shift (a title
+/// bar, a frame); a bigger one is the window being moved.
+const LARGEST_SHIFT: f32 = 200.0;
+
+/// What the system adds to a place it is given: `got` minus `asked`, when
+/// small enough to be its doing. Some systems (KDE on Wayland, through
+/// X11) place the inside of the window where its frame was asked for, so
+/// a place saved as it is would creep down by a title bar each start.
+pub fn shift(asked: Vec2, got: Vec2) -> Vec2 {
+    let d = got - asked;
+    if d.x.abs() <= LARGEST_SHIFT && d.y.abs() <= LARGEST_SHIFT {
+        d
+    } else {
+        Vec2::ZERO
+    }
+}
+
 /// Places the window once at start, then follows where it is.
 #[derive(Default)]
 pub struct Keeper {
     placed: bool,
     frames: u32,
+    /// Opened where it was left: waiting to see where the system put it.
+    measure: Option<Vec2>,
+    /// What the system adds to the place it is given, taken off what is saved.
+    shift: Vec2,
     /// Where the window is now, when it is neither maximised nor full screen.
     pub now: Option<Place>,
 }
@@ -65,7 +87,8 @@ impl Keeper {
                 return;
             };
             self.placed = true;
-            if saved.is_some_and(|p| fits(p, monitor)) {
+            if let Some(p) = saved.filter(|p| fits(*p, monitor)) {
+                self.measure = Some(Vec2::new(p[0], p[1]));
                 return;
             }
             let [x, y, w, h] = first(monitor);
@@ -74,7 +97,16 @@ impl Keeper {
             return;
         }
         if let (Some(inner), Some(outer), false) = (inner, outer, maxed) {
-            self.now = Some([outer.min.x, outer.min.y, inner.width(), inner.height()]);
+            if let Some(asked) = self.measure.take() {
+                let got = outer.min.to_vec2();
+                self.shift = shift(asked, got);
+                crate::actlog::line(format!(
+                    "window: asked {:.0},{:.0}, got {:.0},{:.0}, shift {:.0},{:.0}",
+                    asked.x, asked.y, got.x, got.y, self.shift.x, self.shift.y
+                ));
+            }
+            let at = outer.min - self.shift;
+            self.now = Some([at.x, at.y, inner.width(), inner.height()]);
         }
     }
 }
@@ -91,6 +123,20 @@ mod tests {
         assert_eq!((w, h), (2688.0, 1512.0));
         assert_eq!((x, y), (576.0, 324.0));
         assert!(fits(first(SCREEN), SCREEN));
+    }
+
+    #[test]
+    fn a_window_placed_lower_by_the_system_is_saved_where_it_was_asked() {
+        // asked at 251,273, put a title bar lower: the place saved stays put
+        let s = shift(Vec2::new(251.0, 273.0), Vec2::new(251.0, 310.0));
+        assert_eq!(s, Vec2::new(0.0, 37.0));
+        let saved = Vec2::new(251.0, 310.0) - s;
+        assert_eq!(saved, Vec2::new(251.0, 273.0));
+        // far off: the window was moved, not shifted
+        assert_eq!(
+            shift(Vec2::new(251.0, 273.0), Vec2::new(900.0, 700.0)),
+            Vec2::ZERO
+        );
     }
 
     #[test]
