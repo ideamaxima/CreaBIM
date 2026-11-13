@@ -3,7 +3,7 @@
 //! leaves it out when any of its sets is switched off there. Sets sit in
 //! folders, which can sit in folders and can be empty.
 
-use crate::{Element, ElementId, ElementKind, Model, Transaction};
+use crate::{Element, ElementId, ElementKind, Model, Transaction, ViewHidden};
 use serde::{Deserialize, Serialize};
 
 /// A set: its name is the element's name.
@@ -96,8 +96,40 @@ pub fn apply_combination(model: &Model, combination: ElementId, view: ElementId)
     tx.replace(e.clone(), after)
 }
 
-/// Store `view`'s sets as they are now in `combination`; every view
-/// following it, and `view` itself, take them.
+/// The same sets, whatever their order.
+pub fn same_sets(a: &[ElementId], b: &[ElementId]) -> bool {
+    a.len() == b.len() && a.iter().all(|s| b.contains(s))
+}
+
+/// `view` follows a combination but its sets were switched by hand since.
+pub fn modified(model: &Model, view: &ViewHidden) -> bool {
+    match view.combination.and_then(|c| model.get(c)).map(|e| &e.kind) {
+        Some(ElementKind::Combination(c)) => !same_sets(&c.hidden_sets, &view.sets),
+        _ => false,
+    }
+}
+
+/// A copy of `combination`, named "<name> copy". Returns the transaction
+/// and the copy.
+pub fn duplicate_combination(
+    model: &Model,
+    combination: ElementId,
+) -> Option<(Transaction, ElementId)> {
+    let e = model.get(combination)?;
+    let ElementKind::Combination(c) = &e.kind else {
+        return None;
+    };
+    let copy = Element::new(
+        free_name(model, &format!("{} copy", e.name)),
+        ElementKind::Combination(c.clone()),
+    );
+    let id = copy.id;
+    Some((Transaction::new("Duplicate combination").insert(copy), id))
+}
+
+/// Store `view`'s sets as they are now in `combination`; `view` and the
+/// views following it unmodified take them, the modified ones are left
+/// as they are.
 pub fn update_combination(model: &Model, combination: ElementId, view: ElementId) -> Transaction {
     let tx = Transaction::new("Update combination");
     let Some(ElementKind::View(v)) = model.get(view).map(|e| &e.kind) else {
@@ -110,6 +142,7 @@ pub fn update_combination(model: &Model, combination: ElementId, view: ElementId
     let ElementKind::Combination(c) = &e.kind else {
         return tx;
     };
+    let old = c.hidden_sets.clone();
     let mut tx = tx;
     if c.hidden_sets != hidden_sets {
         let mut after = e.clone();
@@ -122,7 +155,9 @@ pub fn update_combination(model: &Model, combination: ElementId, view: ElementId
         let ElementKind::View(mv) = &m.kind else {
             continue;
         };
-        if m.id != view && mv.hidden.combination != Some(combination) {
+        let follows =
+            mv.hidden.combination == Some(combination) && same_sets(&mv.hidden.sets, &old);
+        if m.id != view && !follows {
             continue;
         }
         let mut after = m.clone();
@@ -716,14 +751,16 @@ mod tests {
         let (tx, c) = new_combination(doc.model(), "Presentation", plan.id);
         doc.commit(tx).unwrap();
         assert_eq!(view(&doc, plan.id).combination, Some(c));
-        // a switch by hand lets go of it
+        // a switch by hand leaves it modified, still on the combination
         let mut e = doc.model().get(plan.id).unwrap().clone();
         if let ElementKind::View(v) = &mut e.kind {
             v.hidden.set_set(a.id, false);
         }
         doc.commit(Transaction::new("on").replace(doc.model().get(plan.id).unwrap().clone(), e))
             .unwrap();
-        assert_eq!(view(&doc, plan.id), ViewHidden::default(), "whole again");
+        assert!(view(&doc, plan.id).sets.is_empty(), "whole again");
+        assert_eq!(view(&doc, plan.id).combination, Some(c));
+        assert!(modified(doc.model(), &view(&doc, plan.id)));
         // a new view from it; the working view stays whole
         let (tx, copy) = view_from_combination(doc.model(), c, plan.id).unwrap();
         doc.commit(tx).unwrap();
@@ -736,7 +773,7 @@ mod tests {
             .unwrap()
             .name
             .ends_with("– Presentation"));
-        assert_eq!(combination_views(doc.model(), c).len(), 1);
+        assert_eq!(combination_views(doc.model(), c).len(), 2);
         // change the combination from a view: its views follow
         let mut e = doc.model().get(plan.id).unwrap().clone();
         if let ElementKind::View(v) = &mut e.kind {
@@ -747,12 +784,34 @@ mod tests {
         doc.commit(update_combination(doc.model(), c, plan.id))
             .unwrap();
         assert_eq!(view(&doc, copy).sets, vec![b.id]);
+        assert!(!modified(doc.model(), &view(&doc, plan.id)));
+        // a view switched by hand is left alone by an update
+        let mut e = doc.model().get(copy).unwrap().clone();
+        if let ElementKind::View(v) = &mut e.kind {
+            v.hidden.set_set(b.id, false);
+        }
+        doc.commit(Transaction::new("b on").replace(doc.model().get(copy).unwrap().clone(), e))
+            .unwrap();
+        let mut e = doc.model().get(plan.id).unwrap().clone();
+        if let ElementKind::View(v) = &mut e.kind {
+            v.hidden.set_set(a.id, true);
+        }
+        doc.commit(Transaction::new("a").replace(doc.model().get(plan.id).unwrap().clone(), e))
+            .unwrap();
+        doc.commit(update_combination(doc.model(), c, plan.id))
+            .unwrap();
+        assert!(view(&doc, copy).sets.is_empty());
+        assert!(modified(doc.model(), &view(&doc, copy)));
+        let (tx, twin) = duplicate_combination(doc.model(), c).unwrap();
+        doc.commit(tx).unwrap();
+        assert_eq!(doc.model().get(twin).unwrap().name, "Presentation copy");
+        doc.commit(delete_combination(doc.model(), twin)).unwrap();
         // a deleted set leaves the combination
         doc.commit(delete(doc.model(), b.id)).unwrap();
         let ElementKind::Combination(k) = &doc.model().get(c).unwrap().kind else {
             unreachable!()
         };
-        assert!(k.hidden_sets.is_empty());
+        assert_eq!(k.hidden_sets, vec![a.id]);
         // deleting the combination: views keep their sets, free
         doc.commit(rename_combination(doc.model(), c, "Print"))
             .unwrap();
