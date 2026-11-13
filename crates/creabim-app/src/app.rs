@@ -12112,6 +12112,20 @@ mod title_tests {
     use super::window_title;
 
     #[test]
+    fn a_temporary_dimension_reads_on_dark_paper() {
+        // drawn for light paper, then turned over as the pane is
+        let paper = eframe::egui::Color32::from_rgb(252, 252, 250);
+        // its number in the light paper's text grey, which turns light
+        let text = crate::theme::Theme::Light.palette().text;
+        let ink = crate::theme::legible(text, paper, text);
+        let r = crate::theme::contrast_ratio(
+            crate::app::paper_dark(ink),
+            crate::app::paper_dark(paper),
+        );
+        assert!(r >= 4.5, "{r}");
+    }
+
+    #[test]
     fn dark_paper_turns_greys_over_and_keeps_colours() {
         use super::{paper_dark, Color32};
         let paper = paper_dark(Color32::from_rgb(250, 250, 247));
