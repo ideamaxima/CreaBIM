@@ -864,8 +864,21 @@ pub fn type_for_key(model: &Model, key: &str) -> Option<ElementId> {
 /// the transaction (empty when nothing needs adding) and the type's id.
 pub fn add_to_model(model: &Model, c: &CatalogueObject) -> (Transaction, ElementId) {
     let mut tx = Transaction::new(format!("Add {}", c.name));
-    if let Some(id) = type_for_key(model, &c.key) {
-        return (tx, id);
+    let existing = type_for_key(model, &c.key);
+    // the project's type still matches the catalogue: placed as it is
+    if let Some(id) = existing {
+        if let Some(ElementKind::ElementType(ElementType {
+            params: TypeParams::Object(t),
+            ..
+        })) = model.get(id).map(|e| &e.kind)
+        {
+            let mesh = |o: &ObjectType| -> Vec<EditMesh> {
+                o.parts.iter().map(|p| p.mesh.clone()).collect()
+            };
+            if mesh(t) == mesh(&c.object) && t.symbol == c.object.symbol {
+                return (tx, id);
+            }
+        }
     }
     let mut by_name: Vec<(String, ElementId)> = crate::library::materials(model)
         .into_iter()
@@ -889,6 +902,25 @@ pub fn add_to_model(model: &Model, c: &CatalogueObject) -> (Transaction, Element
             }
         };
         p.material = Some(id);
+    }
+    // changed in the catalogue since (a drawing imported again): the
+    // project's type takes its new shape, and its objects follow; what was
+    // set on it in the project (category, IFC class, mount) stays
+    if let Some(id) = existing {
+        let Some(old) = model.get(id) else {
+            return (tx, id);
+        };
+        let mut after = old.clone();
+        if let ElementKind::ElementType(ElementType {
+            params: TypeParams::Object(o),
+            ..
+        }) = &mut after.kind
+        {
+            o.parts = t.parts;
+            o.symbol = t.symbol;
+        }
+        tx.label = format!("Update {}", c.name);
+        return (tx.replace(old.clone(), after), id);
     }
     let mut ty = ElementType::new(TypeParams::Object(t));
     ty.description = c.description.clone();
@@ -1396,5 +1428,35 @@ mod tests {
             ObjectCategory::from_label("Heating and ventilation"),
             ObjectCategory::Hvac
         );
+    }
+
+    #[test]
+    fn an_object_changed_in_the_catalogue_updates_its_type_in_the_project() {
+        let mut doc = crate::Document::new();
+        let mut c = crate::catalogue::starter("starter/bathtub").unwrap();
+        c.key = "user/bath".into();
+        let (tx, id) = add_to_model(doc.model(), &c);
+        doc.commit(tx).unwrap();
+        // the same again: nothing to do
+        let (tx, again) = add_to_model(doc.model(), &c);
+        assert_eq!(again, id);
+        assert!(tx.ops.is_empty());
+        // imported again, ten times bigger
+        for p in &mut c.object.parts {
+            for v in &mut p.mesh.vertices {
+                *v *= 10.0;
+            }
+        }
+        let (tx, same) = add_to_model(doc.model(), &c);
+        assert_eq!(same, id);
+        doc.commit(tx).unwrap();
+        let ElementKind::ElementType(ElementType {
+            params: TypeParams::Object(t),
+            ..
+        }) = &doc.model().get(id).unwrap().kind
+        else {
+            unreachable!()
+        };
+        assert_eq!(t.size(), c.object.size());
     }
 }

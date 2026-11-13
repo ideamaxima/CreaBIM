@@ -212,11 +212,19 @@ pub fn read_dxf(
 pub fn guess(words: &str) -> (ObjectCategory, IfcKind, Mount) {
     use ObjectCategory as C;
     // whole words only, so a "floor plane" is no loo; plurals count
-    let lower = words.to_ascii_lowercase();
-    let list: Vec<&str> = lower
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .collect();
+    // "WC01" is "wc 01": letters and figures apart
+    let mut spaced = String::new();
+    let mut last: Option<bool> = None;
+    for ch in words.to_lowercase().chars() {
+        let digit = ch.is_ascii_digit();
+        if ch.is_alphanumeric() && last.is_some_and(|d| d != digit) {
+            spaced.push(' ');
+        }
+        last = ch.is_alphanumeric().then_some(digit);
+        spaced.push(if ch.is_alphanumeric() { ch } else { ' ' });
+    }
+    let lower = spaced;
+    let list: Vec<&str> = lower.split(' ').filter(|w| !w.is_empty()).collect();
     let joined = format!(" {} ", list.join(" "));
     let has = |k: &[&str]| {
         k.iter().any(|k| {
@@ -228,45 +236,70 @@ pub fn guess(words: &str) -> (ObjectCategory, IfcKind, Mount) {
             }
         })
     };
-    let (c, class, p, m) = if has(&["washbasin", "basin", "lavatory", "vanity"]) {
+    let (c, class, p, m) = if has(&[
+        "washbasin",
+        "basin",
+        "lavatory",
+        "vanity",
+        "lavabo",
+        "lavandino",
+        "lavello bagno",
+    ]) {
         (
             C::Bathroom,
             "IfcSanitaryTerminal",
             "WASHHANDBASIN",
             Mount::Wall,
         )
-    } else if has(&["toilet", "wc", "loo"]) {
+    } else if has(&["toilet", "wc", "loo", "vaso", "bidet"]) {
         (C::Bathroom, "IfcSanitaryTerminal", "TOILETPAN", Mount::Wall)
-    } else if has(&["bathtub", "bath tub", "tub", "bath"]) {
+    } else if has(&["bathtub", "bath tub", "tub", "bath", "vasca"]) {
         (C::Bathroom, "IfcSanitaryTerminal", "BATH", Mount::Wall)
-    } else if has(&["shower"]) {
+    } else if has(&["shower", "doccia", "piatto doccia"]) {
         (C::Bathroom, "IfcSanitaryTerminal", "SHOWER", Mount::Wall)
-    } else if has(&["sink"]) {
+    } else if has(&["sink", "lavello"]) {
         (C::Kitchen, "IfcSanitaryTerminal", "SINK", Mount::Wall)
-    } else if has(&["fridge", "refrigerator", "freezer"]) {
+    } else if has(&[
+        "fridge",
+        "refrigerator",
+        "freezer",
+        "frigo",
+        "frigorifero",
+        "congelatore",
+    ]) {
         (
             C::Kitchen,
             "IfcElectricAppliance",
             "FRIDGE_FREEZER",
             Mount::Wall,
         )
-    } else if has(&["oven", "cooker", "hob", "stove", "range"]) {
+    } else if has(&[
+        "oven",
+        "cooker",
+        "hob",
+        "stove",
+        "range",
+        "forno",
+        "piano cottura",
+        "cucina gas",
+        "fornelli",
+    ]) {
         (
             C::Kitchen,
             "IfcElectricAppliance",
             "ELECTRICCOOKER",
             Mount::Wall,
         )
-    } else if has(&["dishwasher"]) {
+    } else if has(&["dishwasher", "lavastoviglie"]) {
         (
             C::Kitchen,
             "IfcElectricAppliance",
             "DISHWASHER",
             Mount::Wall,
         )
-    } else if has(&["socket", "outlet", "receptacle"]) {
+    } else if has(&["socket", "outlet", "receptacle", "presa", "prese"]) {
         (C::Electrical, "IfcOutlet", "POWEROUTLET", Mount::Wall)
-    } else if has(&["switch"]) {
+    } else if has(&["switch", "interruttore", "deviatore"]) {
         (
             C::Electrical,
             "IfcSwitchingDevice",
@@ -303,13 +336,20 @@ pub fn guess(words: &str) -> (ObjectCategory, IfcKind, Mount) {
             "DIRECTIONSOURCE",
             Mount::Wall,
         )
-    } else if has(&["drain", "gully"]) {
+    } else if has(&["drain", "gully", "piletta"]) {
         (C::Plumbing, "IfcWasteTerminal", "FLOORWASTE", Mount::Floor)
-    } else if has(&["boiler", "water heater"]) {
+    } else if has(&["boiler", "water heater", "caldaia", "scaldabagno"]) {
         (C::Plumbing, "IfcBoiler", "WATER", Mount::Wall)
-    } else if has(&["tap", "faucet", "valve"]) {
+    } else if has(&["tap", "faucet", "valve", "rubinetto"]) {
         (C::Plumbing, "IfcValve", "FAUCET", Mount::Wall)
-    } else if has(&["radiator", "heater", "convector"]) {
+    } else if has(&[
+        "radiator",
+        "heater",
+        "convector",
+        "radiatore",
+        "termosifone",
+        "scaldasalviette",
+    ]) {
         (C::Hvac, "IfcSpaceHeater", "RADIATOR", Mount::Wall)
     } else if has(&["diffuser", "grille", "vent"]) {
         (C::Hvac, "IfcAirTerminal", "DIFFUSER", Mount::Ceiling)
@@ -317,21 +357,37 @@ pub fn guess(words: &str) -> (ObjectCategory, IfcKind, Mount) {
         (C::Hvac, "IfcUnitaryEquipment", "SPLITSYSTEM", Mount::Wall)
     } else if has(&["fan"]) {
         (C::Hvac, "IfcFan", "PROPELLORAXIAL", Mount::Wall)
-    } else if has(&["sofa", "couch", "settee"]) {
+    } else if has(&["sofa", "couch", "settee", "divano"]) {
         (C::Living, "IfcFurniture", "SOFA", Mount::Wall)
-    } else if has(&["armchair", "chair", "stool", "seat"]) {
+    } else if has(&[
+        "armchair", "chair", "stool", "seat", "sedia", "sedie", "poltrona", "sgabello",
+    ]) {
         (C::Dining, "IfcFurniture", "CHAIR", Mount::Floor)
-    } else if has(&["desk"]) {
+    } else if has(&["desk", "scrivania"]) {
         (C::Office, "IfcFurniture", "DESK", Mount::Wall)
-    } else if has(&["bed"]) {
+    } else if has(&["bed", "letto", "letti"]) {
         (C::Bedroom, "IfcFurniture", "BED", Mount::Wall)
-    } else if has(&["table"]) {
+    } else if has(&["table", "tavolo", "tavolino"]) {
         (C::Dining, "IfcFurniture", "TABLE", Mount::Floor)
-    } else if has(&["wardrobe", "closet", "shelf", "shelves", "bookcase"]) {
+    } else if has(&[
+        "wardrobe", "closet", "shelf", "shelves", "bookcase", "armadio", "libreria", "scaffale",
+        "mensola",
+    ]) {
         (C::Bedroom, "IfcFurniture", "SHELF", Mount::Wall)
-    } else if has(&["cabinet", "cupboard", "drawer", "unit"]) {
+    } else if has(&[
+        "cabinet",
+        "cupboard",
+        "drawer",
+        "unit",
+        "mobile",
+        "pensile",
+        "cassettiera",
+        "comodino",
+    ]) {
         (C::Kitchen, "IfcFurniture", "FILECABINET", Mount::Wall)
-    } else if has(&["lamp", "light", "plant", "rug", "mirror"]) {
+    } else if has(&[
+        "lamp", "light", "plant", "rug", "mirror", "lampada", "tappeto", "specchio",
+    ]) {
         (C::Living, "IfcFurniture", "NOTDEFINED", Mount::Floor)
     } else {
         (C::Other, "IfcFurniture", "NOTDEFINED", Mount::Floor)
@@ -397,6 +453,17 @@ mod tests {
         let starter = creabim_core::catalogue::starter("starter/sofa-3").unwrap();
         assert!((back.object.size().z - starter.object.size().z).abs() < 1e-3);
         assert!(back.materials.iter().any(|m| m.is_some()));
+    }
+
+    #[test]
+    fn names_say_what_things_are_with_figures_and_in_italian() {
+        assert_eq!(guess("WC01").1.class, "IfcSanitaryTerminal");
+        assert_eq!(guess("WC_001").1.class, "IfcSanitaryTerminal");
+        assert_eq!(guess("vaso sospeso").1.predefined, "TOILETPAN");
+        assert_eq!(guess("piatto doccia 80x80").1.predefined, "SHOWER");
+        assert_eq!(guess("Letto matrimoniale").1.predefined, "BED");
+        assert_eq!(guess("armadio 2 ante").1.predefined, "SHELF");
+        assert_eq!(guess("divano3posti").0, ObjectCategory::Living);
     }
 
     #[test]

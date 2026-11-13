@@ -9,6 +9,8 @@ Issue and pull request numbers refer to the upstream repository.
 ## [Unreleased]
 
 ### Changed
+- Imported objects tell what they are from names with figures ("WC01")
+  and from Italian names too (vaso, lavabo, doccia, letto, armadio…).
 - Sets window: combinations on top, always in sight; the list of sets
   grows with the window, down to the bottom of the canvas.
 - Two sets, two folders or two combinations can't share a name (capitals
@@ -44,6 +46,9 @@ Issue and pull request numbers refer to the upstream repository.
   large it was left.
 
 ### Fixed
+- An object imported again into the catalogue (a DXF with the right units,
+  say) is placed with its new shape: the project's type of it, and the
+  objects already placed, take it too.
 - A new project or a sample left as it came closes without asking to save.
 - Running the tests no longer puts their sample file in Open recent.
 - Hiding something in a view (a set, a category, Hide in view) takes it out
