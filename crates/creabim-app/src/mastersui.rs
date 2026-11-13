@@ -154,6 +154,34 @@ const PAPERS: [(&str, f64, f64); 5] = [
     ("A0", 1189.0, 841.0),
 ];
 
+/// A paper's height when it is an A1's and its length a number of A4
+/// widths (210 mm), as sheets laid out in A4 modules are.
+const A1_HEIGHT: f64 = 594.0;
+const MODULE: f64 = 210.0;
+
+/// The paper `n` A4 modules long at A1's height, landscape.
+fn a1_modules(n: u32) -> DVec2 {
+    DVec2::new(n.max(1) as f64 * MODULE, A1_HEIGHT)
+}
+
+/// What a paper size is called: a standard size, "N × A4 modules" at A1's
+/// height, or "Custom".
+fn paper_name(size: DVec2) -> String {
+    let near = |a: DVec2, b: DVec2| (a - b).length() < 0.5;
+    if let Some((n, _, _)) = PAPERS
+        .iter()
+        .find(|(_, w, h)| near(size, DVec2::new(*w, *h)) || near(size, DVec2::new(*h, *w)))
+    {
+        return n.to_string();
+    }
+    let long = size.x.max(size.y);
+    let n = (long / MODULE).round();
+    if (size.x.min(size.y) - A1_HEIGHT).abs() < 0.5 && n >= 1.0 && (long - n * MODULE).abs() < 0.5 {
+        return format!("A1 high, {n} × A4");
+    }
+    "Custom".into()
+}
+
 /// A text's box, roughly, mm from the corner: for picking.
 fn text_box(at: DVec2, size: f64, text: &str, align: TextAlign) -> (DVec2, DVec2) {
     let w = size * 0.55 * text.chars().count().max(1) as f64;
@@ -2202,13 +2230,7 @@ impl CreaBimApp {
                 *draft = name.clone();
             }
             let size = t.paper.unwrap_or(DVec2::new(420.0, 297.0));
-            let now = PAPERS
-                .iter()
-                .find(|(_, w, h)| {
-                    (size - DVec2::new(*w, *h)).length() < 0.5
-                        || (size - DVec2::new(*h, *w)).length() < 0.5
-                })
-                .map_or("Custom", |p| p.0);
+            let now = paper_name(size);
             let portrait = size.y > size.x;
             let mut pick: Option<DVec2> = None;
             crate::props::row(ui, "Paper", |ui| {
@@ -2229,6 +2251,41 @@ impl CreaBimApp {
                             }
                         }
                     });
+            });
+            // any size, typed (todo 3): the length often in A4 modules
+            let (mut w, mut h) = (size.x, size.y);
+            crate::props::row(ui, "Width", |ui| {
+                ui.add(
+                    egui::DragValue::new(&mut w)
+                        .range(50.0..=5000.0)
+                        .speed(1.0)
+                        .suffix(" mm"),
+                )
+            });
+            crate::props::row(ui, "Height", |ui| {
+                ui.add(
+                    egui::DragValue::new(&mut h)
+                        .range(50.0..=5000.0)
+                        .speed(1.0)
+                        .suffix(" mm"),
+                )
+            });
+            if (w, h) != (size.x, size.y) {
+                pick = Some(DVec2::new(w, h));
+            }
+            let mut modules = (size.x.max(size.y) / MODULE).round().max(1.0) as u32;
+            crate::props::row(ui, "A1 high, A4 modules", |ui| {
+                let r = ui.add(
+                    egui::DragValue::new(&mut modules)
+                        .range(1..=20)
+                        .suffix(" × 210"),
+                );
+                if r.changed() {
+                    pick = Some(a1_modules(modules));
+                }
+                r.on_hover_text(
+                    "A1's height (594 mm), and a length of so many A4 widths (210 mm each)",
+                )
             });
             if let Some(p) = pick {
                 self.edit_master("Master paper", |t| t.paper = Some(p));
@@ -3129,6 +3186,31 @@ mod tests {
             (lo - DVec2::new(5.0, -5.0)).length() < 1e-9
                 && (hi - DVec2::new(5.0, 5.0)).length() < 1e-9
         );
+    }
+
+    #[test]
+    fn papers_of_a4_modules_at_a1_height_are_named_and_made() {
+        assert_eq!(a1_modules(5), DVec2::new(1050.0, 594.0));
+        assert_eq!(paper_name(a1_modules(5)), "A1 high, 5 × A4");
+        assert_eq!(paper_name(DVec2::new(594.0, 1260.0)), "A1 high, 6 × A4");
+        // A1 itself keeps its name though it is nearly four modules
+        assert_eq!(paper_name(DVec2::new(841.0, 594.0)), "A1");
+        assert_eq!(paper_name(DVec2::new(500.0, 300.0)), "Custom");
+    }
+
+    #[test]
+    fn a_new_sheet_takes_its_masters_custom_paper() {
+        let mut app = crate::app::test_app();
+        app.open_master(None);
+        app.add_master("Studio".into(), tb::minimal_band());
+        let id = app.master().expect("a master").0;
+        assert!(app.edit_master("Master paper", |t| t.paper = Some(a1_modules(6))));
+        app.new_sheet_from(id);
+        let sheet = app.active_view.expect("the new sheet shown");
+        let Some(ElementKind::Sheet(s)) = app.doc.model().get(sheet).map(|e| &e.kind) else {
+            panic!("a sheet");
+        };
+        assert_eq!((s.width, s.height), (1260.0, 594.0));
     }
 
     #[test]
