@@ -913,12 +913,14 @@ fn nearest(list: &[(ElementId, String, creabim_core::Level)], id: ElementId) -> 
 /// The "To next" cell: the gap up to the level above and, when the storey
 /// isn't as tall as that, a Fit button. True when Fit is clicked.
 fn to_next(ui: &mut egui::Ui, gap: f64, above: &str, fit: bool) -> bool {
-    // one line: Fit wrapping under the gap would make the whole row taller
+    // one line: Fit wrapping under the gap would make the whole row
+    // taller; and its room kept when it is hidden, so the window doesn't
+    // widen as it shows
     ui.horizontal(|ui| {
         ui.label(crate::units::len(gap))
             .on_hover_text(format!("From here up to {above}"));
-        fit && ui
-            .small_button("Fit")
+        let b = ui.add_visible(fit, egui::Button::new("Fit").small());
+        fit && b
             .on_hover_text(format!("Make the storey as tall as the gap up to {above}"))
             .clicked()
     })
@@ -964,21 +966,17 @@ mod tests {
     #[test]
     fn fit_stays_beside_the_gap_on_one_line() {
         let ctx = egui::Context::default();
-        let mut heights = vec![];
+        let mut sizes = vec![];
         let _ = ctx.run_ui(Default::default(), |ui| {
             for fit in [false, true] {
                 let r = ui.allocate_ui(egui::vec2(40.0, 100.0), |ui| {
                     to_next(ui, 3.0, "First Floor", fit);
                 });
-                heights.push(r.response.rect.height());
+                sizes.push(r.response.rect.size());
             }
         });
-        assert!(
-            heights[1] <= heights[0] + 1.0,
-            "row grew from {} to {} with Fit",
-            heights[0],
-            heights[1]
-        );
+        // neither taller nor wider: the window stays as it is
+        assert_eq!(sizes[0], sizes[1], "the cell changed size with Fit");
     }
 
     /// Duplicate and Delete keep to one line however narrow their column
