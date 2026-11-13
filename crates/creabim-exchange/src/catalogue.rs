@@ -123,15 +123,17 @@ pub fn object(
 /// A plan-only object from a DXF drawing: its lines (blocks exploded,
 /// arcs as short segments) are the plan symbol, its point (0,0) where the
 /// object is placed from, and a plain box over the drawing, `height` tall,
-/// stands for it in 3D. Text, hatches and dimensions are left out.
+/// stands for it in 3D. Text, hatches and dimensions are left out. Its
+/// unit is `unit` mm when given, else the one its header names.
 pub fn read_dxf(
     bytes: &[u8],
     name: &str,
     key: &str,
     height: f64,
+    unit: Option<f64>,
 ) -> Result<CatalogueObject, ExchangeError> {
     let text = crate::titleblock::dxf_text(bytes);
-    let items = crate::titleblock::dxf_items(&text).map_err(ExchangeError::Other)?;
+    let items = crate::titleblock::dxf_items_in(&text, unit).map_err(ExchangeError::Other)?;
     let mut symbol = vec![];
     for it in items {
         let creabim_core::titleblock::TitleItem::Line { points, .. } = it else {
@@ -501,7 +503,7 @@ mod tests {
         // a 400 × 600 mm outline drawn from its back corner, a line and a
         // circle, with a text left out
         let dxf = "0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n0\nLWPOLYLINE\n90\n4\n70\n1\n10\n0\n20\n0\n10\n400\n20\n0\n10\n400\n20\n-600\n10\n0\n20\n-600\n0\nLINE\n10\n0\n20\n-100\n11\n400\n21\n-100\n0\nCIRCLE\n10\n200\n20\n-350\n40\n100\n0\nTEXT\n10\n5\n20\n5\n40\n4\n1\nWC\n0\nENDSEC\n0\nEOF\n";
-        let c = read_dxf(dxf.as_bytes(), "toilet", "user/toilet", 0.4).unwrap();
+        let c = read_dxf(dxf.as_bytes(), "toilet", "user/toilet", 0.4, None).unwrap();
         assert!(c
             .object
             .symbol
@@ -520,11 +522,15 @@ mod tests {
         );
         assert!((hi.z - 0.4).abs() < 1e-9 && lo.z.abs() < 1e-9);
         assert_eq!(c.object.ifc.class, "IfcSanitaryTerminal");
+        // the same file said to be in metres, whatever its header: 1000×
+        let m = read_dxf(dxf.as_bytes(), "toilet", "user/toilet", 0.4, Some(1000.0)).unwrap();
+        assert!((m.object.size().x - 400.0).abs() < 1e-6);
         assert!(read_dxf(
             b"0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n",
             "x",
             "user/x",
-            1.0
+            1.0,
+            None
         )
         .is_err());
     }

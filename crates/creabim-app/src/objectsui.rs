@@ -29,6 +29,8 @@ pub(super) struct CatalogueUi {
     save_name: String,
     /// The height typed for an object made from a DXF drawing.
     dxf_height: String,
+    /// The unit a DXF drawing is read in, mm; none: its header's.
+    dxf_unit: Option<f64>,
     /// How tall the buttons under the list were last drawn: the list
     /// leaves them that much room, however they wrap.
     bottom: f32,
@@ -38,8 +40,8 @@ pub(super) struct CatalogueUi {
 enum CatAsk {
     Place(Box<CatalogueObject>, Option<ElementId>),
     Import,
-    /// A DXF drawing as a plan-only object this tall.
-    ImportDxf(f64),
+    /// A DXF drawing as a plan-only object this tall, in this unit (mm).
+    ImportDxf(f64, Option<f64>),
     SaveSelection,
     Delete(String),
     Reveal,
@@ -868,13 +870,30 @@ impl CreaBimApp {
                     if h.is_none() {
                         r.on_hover_text("A length above zero, as 400 or 40cm");
                     }
+                    let units: [(Option<f64>, &str); 4] =
+                        [(None, "From file"), (Some(1.0), "mm"), (Some(10.0), "cm"), (Some(1000.0), "m")];
+                    let shown = units
+                        .iter()
+                        .find(|u| u.0 == cat.dxf_unit)
+                        .map_or("From file", |u| u.1);
+                    ui.label("Units");
+                    egui::ComboBox::from_id_salt("dxf_units")
+                        .selected_text(shown)
+                        .width(90.0)
+                        .show_ui(ui, |ui| {
+                            for (u, l) in units {
+                                ui.selectable_value(&mut cat.dxf_unit, u, l);
+                            }
+                        })
+                        .response
+                        .on_hover_text("What one unit of the drawing is. From file uses the unit the DXF names, which is sometimes wrong");
                     if ui
                         .add_enabled(h.is_some(), egui::Button::new("Import DXF as plan symbol…"))
                         .on_hover_text("A DXF drawing becomes one object: its lines are what plans show, its point 0,0 where it is placed from, and a plain box this tall stands for it in 3D")
                         .clicked()
                     {
                         if let Some(h) = h {
-                            asks.push(CatAsk::ImportDxf(h));
+                            asks.push(CatAsk::ImportDxf(h, cat.dxf_unit));
                         }
                     }
                     if ui
@@ -942,7 +961,7 @@ impl CreaBimApp {
                 };
                 self.import_object(&path);
             }
-            CatAsk::ImportDxf(height) => {
+            CatAsk::ImportDxf(height, unit) => {
                 let Some(path) = rfd::FileDialog::new()
                     .set_title("Import a DXF drawing as an object")
                     .add_filter("DXF drawings", &["dxf", "DXF"])
@@ -950,7 +969,7 @@ impl CreaBimApp {
                 else {
                     return;
                 };
-                self.import_dxf_object(&path, height);
+                self.import_dxf_object(&path, height, unit);
             }
             CatAsk::SaveSelection => {
                 let Some(dir) = user_dir() else {
@@ -1011,7 +1030,7 @@ impl CreaBimApp {
 
     /// Read a file as a new object of the user's catalogue.
     /// A DXF drawing as a plan-only object of the user's catalogue.
-    pub(super) fn import_dxf_object(&mut self, path: &Path, height: f64) {
+    pub(super) fn import_dxf_object(&mut self, path: &Path, height: f64, unit: Option<f64>) {
         let Some(dir) = user_dir() else {
             self.status = "There is no settings folder to keep the catalogue in.".into();
             return;
@@ -1026,7 +1045,7 @@ impl CreaBimApp {
         let read = std::fs::read(path)
             .map_err(|e| e.to_string())
             .and_then(|b| {
-                creabim_exchange::catalogue::read_dxf(&b, &name, &key, height)
+                creabim_exchange::catalogue::read_dxf(&b, &name, &key, height, unit)
                     .map_err(|e| e.to_string())
             });
         match read {
