@@ -163,6 +163,65 @@ impl CreaBimApp {
             .or(self.active_view)
     }
 
+    /// What the areas show, as the project file keeps it (`ui_areas` in
+    /// its meta table): reopened, the file shows the same views.
+    pub(super) fn areas_json(&self) -> String {
+        json!({
+            "root": self.areas.root,
+            "focus": self.areas.focus,
+            "max": self.areas.max,
+        })
+        .to_string()
+    }
+
+    /// Show what a project file kept (`saved`, from [`Self::areas_json`]):
+    /// views since deleted give way to the first plan. Without it (an older
+    /// file, a new project) one area shows the first plan.
+    pub(super) fn restore_areas(&mut self, saved: Option<&str>) {
+        let first = self.first_plan();
+        let parsed = saved.and_then(|s| serde_json::from_str::<Value>(s).ok());
+        let root = parsed
+            .as_ref()
+            .and_then(|v| serde_json::from_value::<Node>(v["root"].clone()).ok());
+        match root {
+            Some(mut root) => {
+                let model = self.doc.model();
+                root.forget(&|id| model.get(id).is_some(), first);
+                let n = root.len();
+                self.areas.root = root;
+                let v = parsed.unwrap_or_default();
+                self.areas.focus = v["focus"].as_u64().map_or(0, |f| f as usize).min(n - 1);
+                self.areas.max = v["max"].as_u64().map(|m| m as usize).filter(|m| *m < n);
+            }
+            None => {
+                self.areas.root = Node::Area(first.map_or(Shows::Model, Shows::View));
+                self.areas.focus = 0;
+                self.areas.max = None;
+            }
+        }
+        let shows = self.areas.root.areas();
+        let of = |s: &Shows| match s {
+            Shows::View(v) => Some(*v),
+            _ => None,
+        };
+        self.active_view = shows
+            .get(self.areas.focus)
+            .and_then(of)
+            .or_else(|| shows.iter().find_map(of))
+            .or(first);
+        // already where it should be: not a view opened from the browser
+        self.areas.seen = self.active_view;
+        self.areas.drawing = None;
+        self.areas.last_in_group.clear();
+        self.note_views_open();
+    }
+
+    /// The first floor plan in the browser, else the first view.
+    fn first_plan(&self) -> Option<ElementId> {
+        let views = self.views();
+        views.iter().find(|v| v.2).or(views.first()).map(|v| v.0)
+    }
+
     pub(super) fn store_areas(&mut self) {
         self.shell.settings.areas = Some(self.areas.root.clone());
         self.shell.settings.store();
@@ -1709,6 +1768,47 @@ mod tests {
         app.active_view = Some(plans[0]);
         app.note_views_open();
         assert_eq!(item_for(&app), format!("area.show:{}", plans[1].0));
+    }
+
+    #[test]
+    fn a_project_reopens_on_the_views_it_was_saved_with() {
+        let mut app = crate::app::test_app();
+        let plans = crate::browser::view_groups(app.doc.model())
+            .into_iter()
+            .find(|(g, _)| *g == crate::browser::ViewGroup::Plans)
+            .map(|(_, ids)| ids)
+            .unwrap();
+        // no saved areas (an older file, a new project): one area, first plan
+        app.restore_areas(None);
+        assert_eq!(app.areas.root.areas(), [Shows::View(plans[0])]);
+        assert_eq!(app.active_view, Some(plans[0]));
+        // 3D beside the second plan, worked in the plan: kept, and back
+        app.areas.root = Node::split(
+            true,
+            0.5,
+            Node::Area(Shows::Model),
+            Node::Area(Shows::View(plans[1])),
+        );
+        app.areas.focus = 1;
+        let saved = app.areas_json();
+        app.restore_areas(None);
+        app.restore_areas(Some(&saved));
+        assert_eq!(
+            app.areas.root.areas(),
+            [Shows::Model, Shows::View(plans[1])]
+        );
+        assert_eq!(app.areas.focus, 1);
+        assert_eq!(app.active_view, Some(plans[1]));
+        // a view deleted since gives way to the first plan
+        let gone = saved.replace(&plans[1].0.to_string(), &ElementId::new().0.to_string());
+        app.restore_areas(Some(&gone));
+        assert_eq!(
+            app.areas.root.areas(),
+            [Shows::Model, Shows::View(plans[0])]
+        );
+        // something unreadable is as if nothing was kept
+        app.restore_areas(Some("not json"));
+        assert_eq!(app.areas.root.areas(), [Shows::View(plans[0])]);
     }
 
     #[test]

@@ -378,11 +378,10 @@ impl CreaBimApp {
             app.plan.snap.step_um = settings.snap_spacing_um;
         }
         app.areas.workspace = settings.workspace.clone();
-        if let Some(root) = settings.areas.clone() {
-            app.areas.root = root;
-        }
         app.shell.settings = settings;
         app.load_model(creabim_core::starter::starter_house());
+        // one area on the first plan: the last project's areas belong to it
+        app.restore_areas(None);
         app.status = STARTER_LOADED.into();
         // `creabim-app house.creabim` opens that file instead
         if let Some(path) = launch_file(std::env::args().skip(1)) {
@@ -556,6 +555,7 @@ impl CreaBimApp {
                     }
                     self.import_report = Some(report);
                     self.load_model(imported.model);
+                    self.restore_areas(None);
                     self.watch = Default::default();
                     self.recent.add(path);
                     self.path = with_extension(path, "creabim");
@@ -590,6 +590,11 @@ impl CreaBimApp {
                 self.watch = Default::default();
                 self.recent.add(path);
                 self.path = path.to_string();
+                // the views open when it was saved
+                let saved = creabim_store::read_meta_value(path, "ui_areas")
+                    .ok()
+                    .flatten();
+                self.restore_areas(saved.as_deref());
                 self.saved_revision = Some(self.doc.model().revision());
                 self.status = format!("Opened {path}");
                 // copies a Duplicate left on their originals (MU24)
@@ -622,7 +627,10 @@ impl CreaBimApp {
         if !self.path.to_ascii_lowercase().ends_with(".creabim") {
             self.path = with_extension(&self.path, "creabim");
         }
-        let r = creabim_store::save(&self.path, &self.doc);
+        let r = creabim_store::save(&self.path, &self.doc).and_then(|_| {
+            // the views open now, to reopen it on them
+            creabim_store::write_meta_value(&self.path, "ui_areas", &self.areas_json())
+        });
         if r.is_ok() {
             let path = self.path.clone();
             self.recent.add(&path);

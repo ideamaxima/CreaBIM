@@ -1538,17 +1538,20 @@ impl CreaBimApp {
             "new.layered" => {
                 self.path = new_path("Layered walls");
                 self.load_model(creabim_core::sample::layered_house());
+                self.restore_areas(None);
                 self.status = "Loaded the layered sample house.".into();
             }
             "new.typed" => {
                 self.path = new_path("Wall types");
                 self.load_model(creabim_core::sample::typed_house());
+                self.restore_areas(None);
                 self.status =
                     "Loaded the typed sample house: see Materials › Types… for its types.".into();
             }
             "new.furnished" => {
                 self.path = new_path("Furnished house");
                 self.load_model(creabim_core::sample::furnished_house());
+                self.restore_areas(None);
                 self.status =
                     "Loaded the furnished sample house: see Create › Catalogue… to place more."
                         .into();
@@ -1556,6 +1559,7 @@ impl CreaBimApp {
             "new.garden" => {
                 self.path = new_path("House in its garden");
                 self.load_model(creabim_core::garden::garden_house());
+                self.restore_areas(None);
                 self.status =
                     "Loaded the garden sample: see Create › Site and Create › Building elements."
                         .into();
@@ -1563,16 +1567,19 @@ impl CreaBimApp {
             "new.sample" => {
                 self.path = new_path("Starter house");
                 self.load_model(creabim_core::starter::starter_house());
+                self.restore_areas(None);
                 self.status = STARTER_LOADED.into();
             }
             "new.simple" => {
                 self.path = new_path("Simple house");
                 self.load_model(sample_house());
+                self.restore_areas(None);
                 self.status = "Loaded the simple sample house.".into();
             }
             "new.buried" => {
                 self.path = new_path("Beam in a wall");
                 self.load_model(creabim_core::sample::sample_with_buried_beam().0);
+                self.restore_areas(None);
                 self.status = "Loaded the sample house with a beam inside its south wall. Hover it in Section A and press Tab to reach the beam.".into();
             }
             "new.empty" => {
@@ -1593,6 +1600,7 @@ impl CreaBimApp {
                 let tx = creabim_core::units::set_units(m.model(), units);
                 let _ = m.commit(tx);
                 self.load_model(m.model().clone());
+                self.restore_areas(None);
                 self.path = new_path("Untitled");
                 self.status =
                     "New project with two levels. Pick the Wall tool to start drawing.".into();

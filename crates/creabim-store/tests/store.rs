@@ -1,5 +1,7 @@
 use creabim_core::{sample::sample_house, Document, Element, ElementKind, Level, Transaction};
-use creabim_store::{import_json, load, open, read_meta, save, Store, StoreError};
+use creabim_store::{
+    import_json, load, open, read_meta, read_meta_value, save, write_meta_value, Store, StoreError,
+};
 use std::path::{Path, PathBuf};
 
 fn tmp() -> (tempfile::TempDir, PathBuf) {
@@ -428,4 +430,20 @@ fn materials_saved_before_the_library_open_unchanged() {
         creabim_core::Material::new(creabim_core::Hatch::Brick, [0.78, 0.55, 0.45])
     );
     assert_eq!((m.roughness, m.metallic, m.opacity), (0.8, 0.0, 1.0));
+}
+
+#[test]
+fn a_file_keeps_extra_meta_entries_beside_the_model() {
+    let (_dir, path) = tmp();
+    let doc = Document::from_model(sample_house());
+    save(&path, &doc).unwrap();
+    assert_eq!(read_meta_value(&path, "ui_areas").unwrap(), None);
+    write_meta_value(&path, "ui_areas", "{\"a\":1}").unwrap();
+    assert_eq!(
+        read_meta_value(&path, "ui_areas").unwrap().as_deref(),
+        Some("{\"a\":1}")
+    );
+    // the model reads as before
+    assert_eq!(load(&path).unwrap().model(), doc.model());
+    assert!(read_meta(&path).is_ok());
 }

@@ -110,6 +110,23 @@ pub fn load(path: impl AsRef<Path>) -> Result<Document> {
     }
 }
 
+/// One entry of a project file's `meta` table, none when it has none:
+/// what the app keeps with the project besides the model (the views that
+/// were open). Readers that don't know a key leave it alone.
+pub fn read_meta_value(path: impl AsRef<Path>, key: &str) -> Result<Option<String>> {
+    let conn = schema::open_existing(path.as_ref())?;
+    Ok(conn
+        .query_row("SELECT value FROM meta WHERE key = ?1", [key], |r| r.get(0))
+        .optional()?)
+}
+
+/// Write one entry of a project file's `meta` table (see
+/// [`read_meta_value`]). The file must exist: save it first.
+pub fn write_meta_value(path: impl AsRef<Path>, key: &str, value: &str) -> Result<()> {
+    let conn = schema::open_existing(path.as_ref())?;
+    set_meta(&conn, key, value)
+}
+
 /// Read the `meta` table of a project file.
 pub fn read_meta(path: impl AsRef<Path>) -> Result<Meta> {
     read_meta_from(&schema::open_existing(path.as_ref())?)

@@ -19,6 +19,10 @@ Issue and pull request numbers refer to the upstream repository.
   a whole folder at once. Views, sheets and view templates keep what they
   switch off; the 3D view, for the session. Files with sets don't open in
   CreaBIM 1.1.1.
+- A project file keeps the views that were open when it was saved, and
+  reopens on them. Opening a file no longer takes the last project's areas
+  along: a file saved before, a new project or the starter house open on
+  one area with the first floor plan.
 - The window opens at 70% of the screen the first time, then where and how
   large it was left.
 
