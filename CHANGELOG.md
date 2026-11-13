@@ -37,6 +37,7 @@ Issue and pull request numbers refer to the upstream repository.
   large it was left.
 
 ### Fixed
+- Running the tests no longer puts their sample file in Open recent.
 - Hiding something in a view (a set, a category, Hide in view) takes it out
   of the selection: its grips and dimensions no longer stay over nothing.
 - The view's Visibility panel lists the elements hidden in it even when the
