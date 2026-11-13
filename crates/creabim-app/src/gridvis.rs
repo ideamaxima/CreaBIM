@@ -1118,8 +1118,8 @@ impl CreaBimApp {
                     .into_iter()
                     .map(|(e, g)| (e.id, e.name.clone(), g.color))
                     .collect();
-                if !groups.is_empty() {
-                    if crate::props::subsection(ui, "vis.grids", "Grid systems", true) { ui.add_enabled_ui(!h.hides_category(Category::Grids), |ui| {
+                if !groups.is_empty()
+                        && crate::props::subsection(ui, "vis.grids", "Grid systems", true) { ui.add_enabled_ui(!h.hides_category(Category::Grids), |ui| {
                         for (id, name, color) in groups {
                             crate::props::flow(ui, |ui| {
                                 swatch(ui, color);
@@ -1140,7 +1140,6 @@ impl CreaBimApp {
                         }
                     });
                     }
-                }
                 let any_sets = self
                     .doc
                     .model()
