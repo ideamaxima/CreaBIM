@@ -261,6 +261,26 @@ pub fn draw(painter: &egui::Painter, start: Pos2, now: Pos2) {
     }
 }
 
+/// Does a drag from `start` to `now` take a shape drawn through `pts`
+/// (screen)? Crossing, any of it touched; else all of it inside. The lines
+/// between the points count too, so a long line crossing the box is
+/// touched though both its ends lie outside.
+pub fn takes(start: Pos2, now: Pos2, pts: &[Pos2], crossing: bool) -> bool {
+    if pts.is_empty() {
+        return false;
+    }
+    let mut dense = vec![pts[0]];
+    for w in pts.windows(2) {
+        let n = (w[0].distance(w[1]) / 4.0).ceil().clamp(1.0, 2000.0) as usize;
+        dense.extend((1..=n).map(|k| w[0].lerp(w[1], k as f32 / n as f32)));
+    }
+    if crossing {
+        dense.iter().any(|p| covers(start, now, *p))
+    } else {
+        dense.iter().all(|p| covers(start, now, *p))
+    }
+}
+
 /// The ids a box from `start` to `now` takes, given each element's parts
 /// as screen rectangles (an element may have several).
 pub fn pick(
