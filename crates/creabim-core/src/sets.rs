@@ -3,7 +3,7 @@
 //! leaves it out when any of its sets is switched off there. A "/" in a
 //! set's name puts it in a folder ("Phase 1/Temporary").
 
-use crate::{Element, ElementId, ElementKind, Model};
+use crate::{Element, ElementId, ElementKind, Model, Transaction};
 use serde::{Deserialize, Serialize};
 
 /// A set: its name is the element's name.
@@ -47,6 +47,64 @@ pub fn uses(model: &Model, set: ElementId) -> (usize, usize) {
         }
     }
     (elements, views)
+}
+
+/// Put `ids` in `set` (`add`) or take them out of it. Elements already
+/// where they should be are left alone.
+pub fn assign(model: &Model, set: ElementId, ids: &[ElementId], add: bool) -> Transaction {
+    let mut tx = Transaction::new(if add { "Add to set" } else { "Remove from set" });
+    for id in ids {
+        let Some(e) = model.get(*id) else { continue };
+        if matches!(e.kind, ElementKind::Set(_)) || e.sets.contains(&set) == add {
+            continue;
+        }
+        let mut after = e.clone();
+        after.sets.retain(|s| *s != set);
+        if add {
+            after.sets.push(set);
+        }
+        tx = tx.replace(e.clone(), after);
+    }
+    tx
+}
+
+/// Give `set` a new name; what is in it and the views stay as they are.
+pub fn rename(model: &Model, set: ElementId, name: &str) -> Transaction {
+    let tx = Transaction::new("Rename set");
+    match model.get(set) {
+        Some(e) if matches!(e.kind, ElementKind::Set(_)) && e.name != name => {
+            let mut after = e.clone();
+            after.name = name.to_string();
+            tx.replace(e.clone(), after)
+        }
+        _ => tx,
+    }
+}
+
+/// Delete `set`: its elements stay, out of it, and views and view
+/// templates forget it.
+pub fn delete(model: &Model, set: ElementId) -> Transaction {
+    let mut tx = Transaction::new("Delete set");
+    if !matches!(model.get(set).map(|e| &e.kind), Some(ElementKind::Set(_))) {
+        return tx;
+    }
+    for e in model.iter() {
+        let mut after = e.clone();
+        after.sets.retain(|s| *s != set);
+        match &mut after.kind {
+            ElementKind::View(v) => v.hidden.sets.retain(|s| *s != set),
+            ElementKind::StylePack(p) => {
+                for t in &mut p.templates {
+                    t.hidden_sets.retain(|s| *s != set);
+                }
+            }
+            _ => {}
+        }
+        if after != *e {
+            tx = tx.replace(e.clone(), after);
+        }
+    }
+    tx.remove_cascade(model, set)
 }
 
 #[cfg(test)]
@@ -117,6 +175,33 @@ mod tests {
         assert_eq!(folder(&a.name), Some("Phase 1"));
         assert_eq!(folder(&b.name), None);
         assert_eq!(sets(&m).len(), 2);
+    }
+
+    #[test]
+    fn deleting_a_set_frees_its_elements_and_views() {
+        let mut doc = crate::Document::new();
+        let lvl = Element::new(
+            "L0",
+            ElementKind::Level(crate::Level {
+                elevation: 0.0,
+                height: 3.0,
+            }),
+        );
+        doc.commit(Transaction::new("l").insert(lvl.clone()))
+            .unwrap();
+        let s = new_set("Temporary");
+        doc.commit(Transaction::new("s").insert(s.clone())).unwrap();
+        let tx = assign(doc.model(), s.id, &[lvl.id], true);
+        doc.commit(tx).unwrap();
+        assert_eq!(doc.model().get(lvl.id).unwrap().sets, vec![s.id]);
+        // adding twice changes nothing
+        assert!(assign(doc.model(), s.id, &[lvl.id], true).ops.is_empty());
+        doc.commit(rename(doc.model(), s.id, "Phase 1/Temporary"))
+            .unwrap();
+        assert_eq!(doc.model().get(s.id).unwrap().name, "Phase 1/Temporary");
+        doc.commit(delete(doc.model(), s.id)).unwrap();
+        assert!(doc.model().get(s.id).is_none());
+        assert!(doc.model().get(lvl.id).unwrap().sets.is_empty());
     }
 
     #[test]

@@ -198,6 +198,12 @@ pub fn entries(tab: usize) -> Vec<Entry> {
                 "Add, edit, delete and assign the project's materials",
             ),
             act(
+                "sets",
+                "Sets",
+                "layers",
+                "Your own sets of elements, of any category: make, rename and delete them, and switch them off view by view",
+            ),
+            act(
                 "graphicstyles",
                 "Style packs",
                 "align-left",
