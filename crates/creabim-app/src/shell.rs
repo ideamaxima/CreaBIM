@@ -331,6 +331,37 @@ fn command_icon(c: Command) -> &'static str {
 /// status bar's mouse hints.
 pub(super) static MODS: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
 
+/// The actions `view_action` handles: a click reaches it only when its id
+/// is here (MU22: some were handled but never routed; Grid and Picture too).
+pub(crate) const VIEW_ACTIONS: &[&str] = &[
+    "view.shaded",
+    "view.tag",
+    "view.tagfixtures",
+    "view.reveal",
+    "view.colour",
+    "view.xray",
+    "view.rooms",
+    "view.ceiling",
+    "view.tagrooms",
+    "view.roomtags",
+    "view.tempdims",
+    "view.ranges",
+    "view.reference",
+    "view.grid",
+    "sheet.preview",
+    "sheet.text",
+    "sheet.picture",
+    "sheet.north",
+    "sheet.scalebar",
+    "sheet.pdf",
+    "export.sheets",
+    "sheet.cloud",
+    "sheet.revtable",
+    "tag.all",
+    "sheet.keyplan",
+    "sheet.guides",
+];
+
 impl CreaBimApp {
     fn cmd_item(&self, c: Command) -> Item {
         let enabled = match c {
@@ -1726,7 +1757,10 @@ impl CreaBimApp {
             "sched.xlsx" => self.schedule_export = Some("xlsx".into()),
             "railpick" => {
                 if let Some(e) = self.doc.model().iter().find(|e| e.id.0.to_string() == arg) {
-                    let (id, opens) = (e.id, matches!(e.kind, ElementKind::View(_) | ElementKind::Sheet(_)));
+                    let (id, opens) = (
+                        e.id,
+                        matches!(e.kind, ElementKind::View(_) | ElementKind::Sheet(_)),
+                    );
                     self.selection.only(id);
                     if opens {
                         self.active_view = Some(id);
@@ -1781,14 +1815,7 @@ impl CreaBimApp {
                     web.hide_all(self.shell.classic);
                 }
             }
-            "view.shaded" | "view.tag" | "view.tagfixtures" | "view.reveal" | "view.colour"
-            | "view.xray" | "view.rooms" | "view.ceiling" | "view.tagrooms" | "view.roomtags"
-            // (these four were handled below but never routed here: MU22)
-            | "view.tempdims" | "view.ranges" | "view.reference" | "sheet.preview" | "sheet.text"
-            | "sheet.north" | "sheet.scalebar" | "sheet.pdf" | "export.sheets" | "sheet.cloud"
-            | "sheet.revtable" | "tag.all" | "sheet.keyplan" | "sheet.guides" => {
-                self.view_action(head)
-            }
+            h if VIEW_ACTIONS.contains(&h) => self.view_action(head),
             "cleanup.stacked" => {
                 // copies left on their originals (MU24): one undo step
                 let ids = creabim_core::checks::stacked_copies(self.doc.model());
@@ -1828,14 +1855,27 @@ impl CreaBimApp {
                     if gone.contains(a) || gone.contains(b) {
                         continue;
                     }
-                    let (Some(ea), Some(eb)) = (model.get(*a), model.get(*b)) else { continue };
-                    let (ElementKind::Wall(wa), ElementKind::Wall(wb)) = (&ea.kind, &eb.kind) else { continue };
+                    let (Some(ea), Some(eb)) = (model.get(*a), model.get(*b)) else {
+                        continue;
+                    };
+                    let (ElementKind::Wall(wa), ElementKind::Wall(wb)) = (&ea.kind, &eb.kind)
+                    else {
+                        continue;
+                    };
                     // the thicker one stays, stretched over both
-                    let (keep, k, other, o) = if wa.thickness >= wb.thickness { (ea, wa, eb, wb) } else { (eb, wb, ea, wa) };
+                    let (keep, k, other, o) = if wa.thickness >= wb.thickness {
+                        (ea, wa, eb, wb)
+                    } else {
+                        (eb, wb, ea, wa)
+                    };
                     let d = k.direction();
                     let along = |p: glam::DVec2| (p - k.start).dot(d);
-                    let lo = [0.0, along(o.start), along(o.end)].into_iter().fold(f64::MAX, f64::min);
-                    let hi = [k.length(), along(o.start), along(o.end)].into_iter().fold(f64::MIN, f64::max);
+                    let lo = [0.0, along(o.start), along(o.end)]
+                        .into_iter()
+                        .fold(f64::MAX, f64::min);
+                    let hi = [k.length(), along(o.start), along(o.end)]
+                        .into_iter()
+                        .fold(f64::MIN, f64::max);
                     let mut after = keep.clone();
                     if let ElementKind::Wall(w) = &mut after.kind {
                         w.start = k.start + d * lo;
@@ -1847,7 +1887,13 @@ impl CreaBimApp {
                 let tx = tx.remove_all_cascade(model, &gone);
                 let r = self.doc.commit(tx);
                 self.selection.clear();
-                self.report(r, format!("Merged {} pair(s) of overlapping walls. Ctrl+Z undoes it.", gone.len()));
+                self.report(
+                    r,
+                    format!(
+                        "Merged {} pair(s) of overlapping walls. Ctrl+Z undoes it.",
+                        gone.len()
+                    ),
+                );
             }
             "rooms.fromnotes" => {
                 self.status = crate::roomtool::rooms_from_notes(&mut self.doc);

@@ -12141,6 +12141,23 @@ mod sheet_tools_tests {
     }
 
     #[test]
+    fn the_grid_button_turns_the_grid_behind_drawings_off_and_on() {
+        let mut app = crate::app::test_app();
+        let ctx = egui::Context::default();
+        let before = app.shell.settings.plan_grid;
+        app.run_action(&ctx, "view.grid");
+        assert_ne!(app.shell.settings.plan_grid, before, "Grid toggles");
+        app.run_action(&ctx, "view.grid");
+        assert_eq!(app.shell.settings.plan_grid, before, "and back");
+    }
+
+    #[test]
+    fn a_sheets_picture_button_is_routed() {
+        // it opens a file dialog, so only its routing is checked here
+        assert!(crate::app::shell::VIEW_ACTIONS.contains(&"sheet.picture"));
+    }
+
+    #[test]
     fn a_north_arrow_and_a_scale_bar_go_on_the_sheet_and_into_its_pdf() {
         let mut app = crate::app::test_app();
         let ctx = egui::Context::default();
