@@ -118,7 +118,11 @@ impl CreaBimApp {
             );
             let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             let name = ui_state.new_name.trim().to_string();
-            let ok = !name.is_empty();
+            let set_taken = sets::name_taken(model, &sets::new_set("").kind, &name, None);
+            let folder_taken =
+                sets::name_taken(model, &sets::new_folder("", None).kind, &name, None);
+            let ok = !name.is_empty() && !set_taken;
+            let enter = enter && ok;
             if (ui
                 .add_enabled(ok, egui::Button::new("New set"))
                 .on_hover_text("A new set at the top; move it into a folder from its ⋯ menu")
@@ -129,11 +133,24 @@ impl CreaBimApp {
                 asks.push(Ask::New(name.clone(), false, None));
             }
             if ui
-                .add_enabled(ok, egui::Button::new("New folder"))
+                .add_enabled(
+                    !name.is_empty() && !folder_taken,
+                    egui::Button::new("New folder"),
+                )
                 .on_hover_text("A folder at the top; folders can hold sets and other folders")
                 .clicked()
             {
                 asks.push(Ask::New(name, true, None));
+            }
+            if set_taken || folder_taken {
+                ui.label(
+                    egui::RichText::new(match (set_taken, folder_taken) {
+                        (true, true) => "Already used by a set and a folder",
+                        (true, false) => "Already used by a set",
+                        _ => "Already used by a folder",
+                    })
+                    .color(ui.visuals().error_fg_color),
+                );
             }
         });
         ui.add_space(4.0);
@@ -292,13 +309,13 @@ impl CreaBimApp {
             );
             let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             let name = self.sets.new_name.trim().to_string();
-            if (ui
-                .add_enabled(!name.is_empty(), egui::Button::new("New set"))
-                .clicked()
-                || enter)
-                && !name.is_empty()
-            {
+            let taken = sets::name_taken(model, &sets::new_set("").kind, &name, None);
+            let ok = !name.is_empty() && !taken;
+            if (ui.add_enabled(ok, egui::Button::new("New set")).clicked() || enter) && ok {
                 asks.push(Ask::NewFromSelection(name, self.sets.menu_folder));
+            }
+            if taken {
+                already_used(ui);
             }
         });
         ui.separator();
@@ -584,7 +601,13 @@ fn combinations_section(
             );
             let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             let name = st.new_combination.trim().to_string();
-            let ok = !name.is_empty();
+            let taken = sets::name_taken(
+                model,
+                &ElementKind::Combination(Default::default()),
+                &name,
+                None,
+            );
+            let ok = !name.is_empty() && !taken;
             if (ui
                 .add_enabled(ok, egui::Button::new("New combination"))
                 .on_hover_text("Remembers which sets are on and off in this view")
@@ -593,6 +616,9 @@ fn combinations_section(
                 && ok
             {
                 asks.push(Ask::NewCombination(name));
+            }
+            if taken {
+                already_used(ui);
             }
         });
     });
@@ -610,7 +636,7 @@ fn combinations_section(
             {
                 asks.push(Ask::ApplyCombination(id));
             }
-            name_field(ui, st, id, name, asks);
+            name_field(ui, st, model, id, name, asks);
             if on && modified {
                 ui.label(egui::RichText::new("(modified)").italics());
             }
@@ -688,17 +714,37 @@ fn folder_rows(
 }
 
 /// The editable name of a set or folder; the change goes when it loses focus.
-fn name_field(ui: &mut egui::Ui, st: &mut SetsUi, id: ElementId, name: &str, asks: &mut Vec<Ask>) {
+/// The name of a set, folder or combination, renamed when the field is
+/// left. A name another of its kind has shows "Already used" and is not
+/// taken: the old name comes back.
+fn name_field(
+    ui: &mut egui::Ui,
+    st: &mut SetsUi,
+    model: &Model,
+    id: ElementId,
+    name: &str,
+    asks: &mut Vec<Ask>,
+) {
     let draft = st.names.entry(id).or_insert_with(|| name.to_string());
     let r = ui.add_sized(
         [180.0, 20.0],
         egui::TextEdit::singleline(draft).vertical_align(egui::Align::Center),
     );
-    if r.lost_focus() && draft.trim() != name && !draft.trim().is_empty() {
+    let taken = model
+        .get(id)
+        .is_some_and(|e| sets::name_taken(model, &e.kind, draft, Some(id)));
+    if r.lost_focus() && !taken && draft.trim() != name && !draft.trim().is_empty() {
         asks.push(Ask::Rename(id, draft.trim().to_string()));
     } else if !r.has_focus() && draft != name {
         *draft = name.to_string();
+    } else if taken && r.has_focus() {
+        already_used(ui);
     }
+}
+
+/// The red note under a name another of its kind already has.
+fn already_used(ui: &mut egui::Ui) {
+    ui.label(egui::RichText::new("Already used").color(ui.visuals().error_fg_color));
 }
 
 /// "Move to ▸": the top and every folder but `id` itself.
@@ -795,7 +841,7 @@ fn folder_row(
         if r.clicked() {
             asks.push(Ask::Show(under.clone(), off > 0));
         }
-        name_field(ui, st, id, &e.name, asks);
+        name_field(ui, st, t.model, id, &e.name, asks);
         ui.label(
             egui::RichText::new(match under.len() {
                 1 => "1 set".to_string(),
@@ -857,7 +903,7 @@ fn set_row(
         {
             asks.push(Ask::Show(vec![id], on));
         }
-        name_field(ui, st, id, &e.name, asks);
+        name_field(ui, st, t.model, id, &e.name, asks);
         let n = sets::members(t.model, id).len();
         let views = sets::views_off(t.model, id);
         let info = if views.is_empty() {

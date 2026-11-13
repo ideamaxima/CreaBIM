@@ -8,6 +8,10 @@ Issue and pull request numbers refer to the upstream repository.
 
 ## [Unreleased]
 
+### Changed
+- Two sets, two folders or two combinations can't share a name (capitals
+  aside); the Sets window says so in red as you type.
+
 ### Added
 - Combinations of sets, like ArchiCAD's layer combinations: in the Sets
   window, save which sets are on and off in a view under a name, and pick
