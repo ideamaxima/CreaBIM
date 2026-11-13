@@ -200,26 +200,12 @@ impl CreaBimApp {
         let mut asks = vec![];
         let model = self.doc.model();
         let ids = self.selection.all();
-        let mut list: Vec<(ElementId, String)> = sets::sets(model)
-            .into_iter()
-            .map(|(id, _)| (id, sets::path(model, id)))
-            .collect();
-        list.sort_by(|a, b| a.1.cmp(&b.1));
+        let any = model
+            .iter()
+            .any(|e| matches!(e.kind, ElementKind::Set(_) | ElementKind::SetFolder(_)));
         ui.set_min_width(220.0);
-        for (id, name) in &list {
-            let n = ids
-                .iter()
-                .filter(|e| model.get(**e).is_some_and(|e| e.sets.contains(id)))
-                .count();
-            let all = n == ids.len() && n > 0;
-            let mut on = all;
-            let r =
-                ui.add(egui::Checkbox::new(&mut on, name.as_str()).indeterminate(n > 0 && !all));
-            if r.clicked() {
-                asks.push(Ask::Assign(*id, !all));
-            }
-        }
-        if !list.is_empty() {
+        menu_rows(ui, model, &ids, &mut self.sets.closed, None, 0, &mut asks);
+        if any {
             ui.separator();
         }
         ui.label("New set from selection");
@@ -676,4 +662,67 @@ fn icon_button(ui: &mut egui::Ui, icon: &str, hint: &str) -> egui::Response {
     }
     crate::svgicon::paint(ui.painter(), r.shrink(3.0), icon, v.text_color());
     resp.on_hover_text(hint)
+}
+
+/// The Sets menu's tree: folders that open and close (sharing the
+/// manager's), and a tick per set, full when every selected element is in
+/// it and half when some are.
+fn menu_rows(
+    ui: &mut egui::Ui,
+    model: &Model,
+    ids: &[ElementId],
+    closed: &mut HashSet<ElementId>,
+    folder: Option<ElementId>,
+    depth: usize,
+    asks: &mut Vec<Ask>,
+) {
+    let (folders, set_ids) = sets::children(model, folder);
+    for f in folders {
+        let Some(e) = model.get(f) else { continue };
+        let open = !closed.contains(&f);
+        ui.horizontal(|ui| {
+            ui.add_space(depth as f32 * INDENT);
+            let r = icon_button(
+                ui,
+                if open {
+                    "chevron-down"
+                } else {
+                    "chevron-right"
+                },
+                if open {
+                    "Close the folder"
+                } else {
+                    "Open the folder"
+                },
+            );
+            let l = ui.add(egui::Label::new(&e.name).sense(egui::Sense::click()));
+            if r.clicked() || l.clicked() {
+                if open {
+                    closed.insert(f);
+                } else {
+                    closed.remove(&f);
+                }
+            }
+        });
+        if open {
+            menu_rows(ui, model, ids, closed, Some(f), depth + 1, asks);
+        }
+    }
+    for s in set_ids {
+        let Some(e) = model.get(s) else { continue };
+        let n = ids
+            .iter()
+            .filter(|i| model.get(**i).is_some_and(|x| x.sets.contains(&s)))
+            .count();
+        let all = n == ids.len() && n > 0;
+        ui.horizontal(|ui| {
+            ui.add_space(depth as f32 * INDENT + INDENT);
+            let mut on = all;
+            let r =
+                ui.add(egui::Checkbox::new(&mut on, e.name.as_str()).indeterminate(n > 0 && !all));
+            if r.clicked() {
+                asks.push(Ask::Assign(s, !all));
+            }
+        });
+    }
 }
