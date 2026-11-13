@@ -9,6 +9,8 @@ Issue and pull request numbers refer to the upstream repository.
 ## [Unreleased]
 
 ### Changed
+- Sets window: combinations on top, always in sight; the list of sets
+  grows with the window, down to the bottom of the canvas.
 - Two sets, two folders or two combinations can't share a name (capitals
   aside); the Sets window says so in red as you type.
 

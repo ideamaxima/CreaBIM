@@ -87,7 +87,9 @@ impl CreaBimApp {
             .open(&mut open)
             .default_pos(area.min + Vec2::new(16.0, 56.0))
             .constrain_to(area)
+            .default_size([560.0, (area.height() - 72.0).clamp(360.0, 640.0)])
             .min_width(560.0)
+            .resizable([true, true])
             .collapsible(false)
             .show(ctx, |ui| self.sets_contents(ui, &mut asks));
         self.sets.open = open;
@@ -109,6 +111,12 @@ impl CreaBimApp {
         };
         let view_name = view_id.and_then(|id| model.get(id)).map(|e| e.name.clone());
         let ui_state = &mut self.sets;
+        // few, and picked from: on top, always in sight
+        if !sets::sets(model).is_empty() {
+            combinations_section(ui, model, &hidden, view_name.as_deref(), ui_state, asks);
+            ui.separator();
+        }
+        ui.label(egui::RichText::new("Sets").strong());
         ui.horizontal(|ui| {
             let r = ui.add_sized(
                 [200.0, 20.0],
@@ -210,9 +218,11 @@ impl CreaBimApp {
             all_sets,
         };
         let q = ui_state.search.trim().to_lowercase();
+        // the list takes what the window has left, down to its bottom edge
         egui::ScrollArea::vertical()
-            .max_height(420.0)
-            .auto_shrink([false, true])
+            .id_salt("sets_tree")
+            .max_height(ui.available_height().max(160.0))
+            .auto_shrink([false, false])
             .show(ui, |ui| {
                 if q.is_empty() {
                     folder_rows(ui, &tree, ui_state, None, 0, asks);
@@ -224,8 +234,6 @@ impl CreaBimApp {
                     }
                 }
             });
-        ui.separator();
-        combinations_section(ui, model, &hidden, view_name.as_deref(), ui_state, asks);
     }
 
     /// The Sets menu of the element action bar: which sets the selection
