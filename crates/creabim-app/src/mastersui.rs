@@ -76,6 +76,11 @@ pub struct MastersUi {
     /// A master's name as typed in Properties, kept while its field has
     /// the focus and saved when it loses it.
     names: std::collections::HashMap<ElementId, String>,
+    /// What is typed in Properties, kept while a field has the focus and
+    /// saved when it loses it: a picked text's words (master, item) and
+    /// the values of a master's own fields (master, field).
+    text_drafts: std::collections::HashMap<(ElementId, usize), String>,
+    field_drafts: std::collections::HashMap<(ElementId, String), String>,
     /// The border picked (its margins in Properties), and an edge being
     /// dragged: (0 left, 1 bottom, 2 right, 3 top; where it is now, mm).
     pub border_sel: bool,
@@ -2305,14 +2310,25 @@ impl CreaBimApp {
                 crate::props::row(ui, &format!("{{{f}}}"), |ui| {
                     ui.horizontal(|ui| {
                         let w = ui.available_width() - 26.0;
-                        changed |= ui
-                            .add(
-                                egui::TextEdit::singleline(v)
-                                    .vertical_align(egui::Align::Center)
-                                    .desired_width(w)
-                                    .hint_text("Until a sheet fills it"),
-                            )
-                            .lost_focus();
+                        // a draft that outlives the frame, as the name's
+                        let draft = self
+                            .masters
+                            .field_drafts
+                            .entry((id, f.clone()))
+                            .or_insert_with(|| v.clone());
+                        let r = ui.add(
+                            egui::TextEdit::singleline(draft)
+                                .vertical_align(egui::Align::Center)
+                                .desired_width(w)
+                                .hint_text("Until a sheet fills it")
+                                .id(master_field_id(id, f)),
+                        );
+                        if r.lost_focus() && *draft != *v {
+                            *v = draft.clone();
+                            changed = true;
+                        } else if !r.has_focus() && *draft != *v {
+                            *draft = v.clone();
+                        }
                         if crate::props::icon_button(ui, "trash-2", "Remove this field").clicked() {
                             remove = Some(k);
                         }
@@ -2509,14 +2525,26 @@ impl CreaBimApp {
                 align,
                 angle,
             } => {
+                // a draft that outlives the frame: `text` is remade from
+                // the master each frame and lost what was typed
+                let draft = self
+                    .masters
+                    .text_drafts
+                    .entry((id, i))
+                    .or_insert_with(|| text.clone());
                 let r = crate::props::row(ui, "Words", |ui| {
                     crate::props::fill(
                         ui,
-                        egui::TextEdit::singleline(text).vertical_align(egui::Align::Center),
+                        egui::TextEdit::singleline(draft)
+                            .vertical_align(egui::Align::Center)
+                            .id(master_text_id(id, i)),
                     )
                 });
-                if r.lost_focus() {
+                if r.lost_focus() && *draft != *text {
+                    *text = draft.clone();
                     label = Some("Master text");
+                } else if !r.has_focus() && *draft != *text {
+                    *draft = text.clone();
                 }
                 if crate::props::row(ui, "Size", |ui| {
                     crate::props::fill(
@@ -2862,9 +2890,73 @@ fn master_name_id(id: ElementId) -> egui::Id {
     egui::Id::new(("master-name", id))
 }
 
+/// A picked master text's Words field in Properties.
+fn master_text_id(id: ElementId, item: usize) -> egui::Id {
+    egui::Id::new(("master-text", id, item))
+}
+
+/// The value field of a master's own field in Properties.
+fn master_field_id(id: ElementId, field: &str) -> egui::Id {
+    egui::Id::new(("master-own-field", id, field))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Frames of the master's Properties, typing `words` into the field
+    /// `field` and then leaving it.
+    fn type_into(app: &mut CreaBimApp, field: egui::Id, words: &[&str]) {
+        let ctx = egui::Context::default();
+        let frame = |app: &mut CreaBimApp, events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                app.master_props(ui);
+            });
+            out.textures_delta.clear();
+        };
+        frame(app, vec![]);
+        ctx.memory_mut(|m| m.request_focus(field));
+        frame(app, vec![]);
+        for w in words {
+            frame(app, vec![egui::Event::Text((*w).into())]);
+        }
+        ctx.memory_mut(|m| m.surrender_focus(field));
+        frame(app, vec![]);
+    }
+
+    #[test]
+    fn a_picked_text_and_a_field_of_its_own_take_what_is_typed() {
+        // both were remade from the saved master every frame: what was
+        // typed flickered and was gone
+        let mut app = crate::app::test_app();
+        app.open_master(None);
+        app.add_master("Studio".into(), tb::minimal_band());
+        let (id, _, t) = app.master().expect("a master");
+        let i = t
+            .items
+            .iter()
+            .position(|it| matches!(it, TitleItem::Text { .. }))
+            .expect("a text in the master");
+        app.masters.sel = Some(i);
+        type_into(&mut app, master_text_id(id, i), &["X", "Y"]);
+        let (_, _, t) = app.master().unwrap();
+        let TitleItem::Text { text, .. } = &t.items[i] else {
+            unreachable!()
+        };
+        assert!(text.contains("XY"), "{text}");
+        // a field of its own
+        app.edit_master("Master field", |t| {
+            t.fields.push(("client".into(), String::new()))
+        });
+        type_into(&mut app, master_field_id(id, "client"), &["A", "B"]);
+        let (_, _, t) = app.master().unwrap();
+        let v = &t.fields.iter().find(|(f, _)| f == "client").unwrap().1;
+        assert_eq!(v, "AB");
+    }
 
     #[test]
     fn a_master_picked_in_the_browser_brings_its_view_to_the_front() {
