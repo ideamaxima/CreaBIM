@@ -26,6 +26,8 @@ pub(super) struct SetsUi {
     menu_folder: Option<ElementId>,
     /// The Sets menu's folder list is open.
     menu_pick: bool,
+    /// The name typed for a new combination.
+    new_combination: String,
 }
 
 /// What a click asks for, done once the window or menu is drawn.
@@ -50,6 +52,14 @@ pub(super) enum Ask {
     Delete(ElementId),
     ConfirmDelete(ElementId),
     CancelDelete,
+    /// A new combination named so, from the active view's sets.
+    NewCombination(String),
+    /// The active view follows this combination.
+    ApplyCombination(ElementId),
+    /// The combination takes the active view's sets.
+    UpdateCombination(ElementId),
+    /// A copy of the active view following this combination.
+    ViewFromCombination(ElementId),
 }
 
 /// What the tree rows need to read, gathered before they draw.
@@ -92,10 +102,11 @@ impl CreaBimApp {
         let target = self.vis_target(false);
         let hidden = target.and_then(|t| self.view_hidden(t)).unwrap_or_default();
         let model = self.doc.model();
-        let view_name = match target {
-            Some(gridvis::VisTarget::View(id)) => model.get(id).map(|e| e.name.clone()),
+        let view_id = match target {
+            Some(gridvis::VisTarget::View(id)) => Some(id),
             _ => None,
         };
+        let view_name = view_id.and_then(|id| model.get(id)).map(|e| e.name.clone());
         let ui_state = &mut self.sets;
         ui.horizontal(|ui| {
             let r = ui.add_sized(
@@ -195,6 +206,8 @@ impl CreaBimApp {
                     }
                 }
             });
+        ui.separator();
+        combinations_section(ui, model, &hidden, view_name.as_deref(), ui_state, asks);
     }
 
     /// The Sets menu of the element action bar: which sets the selection
@@ -336,7 +349,15 @@ impl CreaBimApp {
             }
             Ask::Manage => self.sets.open = true,
             Ask::Rename(id, name) => {
-                let tx = sets::rename(self.doc.model(), id, &name);
+                let model = self.doc.model();
+                let tx = if matches!(
+                    model.get(id).map(|e| &e.kind),
+                    Some(ElementKind::Combination(_))
+                ) {
+                    sets::rename_combination(model, id, &name)
+                } else {
+                    sets::rename(model, id, &name)
+                };
                 let r = self.doc.commit(tx);
                 self.report(r, format!("Renamed {name}."));
             }
@@ -439,6 +460,19 @@ impl CreaBimApp {
                 self.sets.delete = None;
                 let model = self.doc.model();
                 let name = model.get(id).map(|e| e.name.clone()).unwrap_or_default();
+                if matches!(
+                    model.get(id).map(|e| &e.kind),
+                    Some(ElementKind::Combination(_))
+                ) {
+                    let tx = sets::delete_combination(model, id);
+                    let r = self.doc.commit(tx);
+                    self.sets.names.remove(&id);
+                    self.report(
+                        r,
+                        format!("Combination {name} deleted; its views keep their sets."),
+                    );
+                    return;
+                }
                 let folder = matches!(
                     model.get(id).map(|e| &e.kind),
                     Some(ElementKind::SetFolder(_))
@@ -459,7 +493,161 @@ impl CreaBimApp {
                     },
                 );
             }
+            Ask::NewCombination(name) => {
+                let Some(gridvis::VisTarget::View(view)) = self.vis_target(false) else {
+                    return;
+                };
+                let (tx, id) = sets::new_combination(self.doc.model(), &name, view);
+                let r = self.doc.commit(tx);
+                self.sets.new_combination.clear();
+                let name = self
+                    .doc
+                    .model()
+                    .get(id)
+                    .map(|e| e.name.clone())
+                    .unwrap_or(name);
+                self.hidden_rev += 1;
+                self.report(r, format!("Combination {name} made from this view."));
+            }
+            Ask::ApplyCombination(id) => {
+                let Some(gridvis::VisTarget::View(view)) = self.vis_target(false) else {
+                    return;
+                };
+                let tx = sets::apply_combination(self.doc.model(), id, view);
+                let r = self.doc.commit(tx);
+                self.hidden_rev += 1;
+                self.report(r, "This view follows the combination.");
+            }
+            Ask::UpdateCombination(id) => {
+                let Some(gridvis::VisTarget::View(view)) = self.vis_target(false) else {
+                    return;
+                };
+                let tx = sets::update_combination(self.doc.model(), id, view);
+                let r = self.doc.commit(tx);
+                self.hidden_rev += 1;
+                let n = sets::combination_views(self.doc.model(), id).len();
+                self.report(r, format!("Combination updated; {n} views follow it."));
+            }
+            Ask::ViewFromCombination(id) => {
+                let Some(gridvis::VisTarget::View(view)) = self.vis_target(false) else {
+                    return;
+                };
+                if let Some((tx, new)) = sets::view_from_combination(self.doc.model(), id, view) {
+                    let r = self.doc.commit(tx);
+                    let name = self
+                        .doc
+                        .model()
+                        .get(new)
+                        .map(|e| e.name.clone())
+                        .unwrap_or_default();
+                    self.report(r, format!("View {name} made; this one is unchanged."));
+                }
+            }
         }
+    }
+}
+
+/// The Combinations: named states of the sets. One is made from the
+/// active view; "New view" copies the active view to follow it, leaving
+/// the view being worked on whole.
+fn combinations_section(
+    ui: &mut egui::Ui,
+    model: &Model,
+    hidden: &ViewHidden,
+    view: Option<&str>,
+    st: &mut SetsUi,
+    asks: &mut Vec<Ask>,
+) {
+    let live = view.is_some();
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new("Combinations").strong());
+        if let Some(v) = view {
+            let now = match hidden.combination.and_then(|c| model.get(c)) {
+                Some(c) => format!("{v} follows {}", c.name),
+                None => format!("{v}: Custom"),
+            };
+            ui.label(egui::RichText::new(now).weak());
+        }
+    });
+    ui.add_enabled_ui(live, |ui| {
+        ui.horizontal(|ui| {
+            let r = ui.add_sized(
+                [200.0, 20.0],
+                egui::TextEdit::singleline(&mut st.new_combination)
+                    .hint_text("Name")
+                    .vertical_align(egui::Align::Center),
+            );
+            let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            let name = st.new_combination.trim().to_string();
+            let ok = !name.is_empty();
+            if (ui
+                .add_enabled(ok, egui::Button::new("New combination"))
+                .on_hover_text("Remembers which sets are on and off in this view")
+                .clicked()
+                || enter)
+                && ok
+            {
+                asks.push(Ask::NewCombination(name));
+            }
+        });
+    });
+    if !live {
+        ui.label(egui::RichText::new("Open a plan or section to use combinations.").weak());
+    }
+    for (id, name) in sets::combinations(model) {
+        ui.horizontal(|ui| {
+            ui.add_space(INDENT);
+            name_field(ui, st, id, name, asks);
+            let views = sets::combination_views(model, id);
+            let r = ui.label(egui::RichText::new(match views.len() {
+                1 => "1 view".to_string(),
+                n => format!("{n} views"),
+            })
+            .weak());
+            if !views.is_empty() {
+                r.on_hover_text(views.join(", "));
+            }
+            ui.add_enabled_ui(live, |ui| {
+                if ui
+                    .button("New view")
+                    .on_hover_text(
+                        "A copy of this view following the combination; this view stays as it is",
+                    )
+                    .clicked()
+                {
+                    asks.push(Ask::ViewFromCombination(id));
+                }
+                let more = icon_button(ui, "ellipsis", "More");
+                egui::Popup::menu(&more).show(|ui| {
+                    if ui
+                        .button("Apply to this view")
+                        .on_hover_text("This view follows the combination")
+                        .clicked()
+                    {
+                        asks.push(Ask::ApplyCombination(id));
+                    }
+                    if ui
+                        .button("Update from this view")
+                        .on_hover_text(
+                            "The combination takes this view's sets; every view following it changes",
+                        )
+                        .clicked()
+                    {
+                        asks.push(Ask::UpdateCombination(id));
+                    }
+                    if ui.button("Delete").clicked() {
+                        asks.push(Ask::Delete(id));
+                    }
+                });
+            });
+            delete_question(
+                ui,
+                st,
+                id,
+                format!("Delete {name}? Its {} views keep their sets.", views.len()),
+                asks,
+            );
+        });
     }
 }
 

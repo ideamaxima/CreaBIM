@@ -84,7 +84,8 @@ impl Element {
             | ElementKind::Grid(_)
             | ElementKind::GridGroup(_)
             | ElementKind::Set(_)
-            | ElementKind::SetFolder(_) => vec![],
+            | ElementKind::SetFolder(_)
+            | ElementKind::Combination(_) => vec![],
             // a top level and attached roofs are soft: when one goes the wall
             // keeps the height it had
             ElementKind::Wall(w) => vec![w.level],
@@ -181,6 +182,7 @@ impl Element {
             ElementKind::Assembly(_) => "IfcMaterialLayerSet",
             ElementKind::Set(_) => "Set",
             ElementKind::SetFolder(_) => "SetFolder",
+            ElementKind::Combination(_) => "Combination",
             ElementKind::Dimension(_) => "Dimension",
             ElementKind::Tag(_) => "Tag",
             ElementKind::Note(_) => "Note",
@@ -382,7 +384,7 @@ impl Element {
             ElementKind::StylePack(p) => p.validate(),
             ElementKind::CropBox(c) => c.validate(),
             ElementKind::Assembly(a) => a.validate(),
-            ElementKind::Set(_) | ElementKind::SetFolder(_) => Ok(()),
+            ElementKind::Set(_) | ElementKind::SetFolder(_) | ElementKind::Combination(_) => Ok(()),
             ElementKind::ElementType(t) => t.validate(),
             ElementKind::Shaft(s) => s.validate(),
             ElementKind::Object(o) => o.validate(),
@@ -501,6 +503,8 @@ pub enum ElementKind {
     Set(crate::sets::Set),
     /// A folder of the user's sets.
     SetFolder(crate::sets::SetFolder),
+    /// A named state of the sets (on or off), that views can follow.
+    Combination(crate::sets::Combination),
 }
 
 impl ElementKind {
@@ -533,6 +537,7 @@ impl ElementKind {
             ElementKind::GridGroup(_) => "GridGroup",
             ElementKind::Set(_) => "Set",
             ElementKind::SetFolder(_) => "SetFolder",
+            ElementKind::Combination(_) => "Combination",
             ElementKind::Assembly(_) => "Assembly",
             ElementKind::Units(_) => "Units",
             ElementKind::Project(_) => "Project information",

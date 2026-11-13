@@ -181,6 +181,9 @@ pub struct ViewHidden {
     /// The user's sets switched off: their elements are left out.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sets: Vec<ElementId>,
+    /// The combination its sets follow; switching a set by hand lets go of it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub combination: Option<ElementId>,
 }
 
 impl ViewHidden {
@@ -189,6 +192,7 @@ impl ViewHidden {
             && self.elements.is_empty()
             && self.grid_groups.is_empty()
             && self.sets.is_empty()
+            && self.combination.is_none()
     }
 
     pub fn hides_category(&self, c: Category) -> bool {
@@ -216,7 +220,9 @@ impl ViewHidden {
         }
     }
 
+    /// Switch a set by hand: the view no longer follows its combination.
     pub fn set_set(&mut self, id: ElementId, hidden: bool) {
+        self.combination = None;
         self.sets.retain(|x| *x != id);
         if hidden {
             self.sets.push(id);

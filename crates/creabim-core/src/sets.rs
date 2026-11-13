@@ -22,6 +22,208 @@ pub struct SetFolder {
     pub parent: Option<ElementId>,
 }
 
+/// A combination: a named state of the sets, as ArchiCAD's layer
+/// combinations. Its name is the element's name. Views that follow it
+/// switch off just its sets; change it and they all change.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Combination {
+    /// The sets it switches off; the others are on.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hidden_sets: Vec<ElementId>,
+}
+
+/// The project's combinations, by name.
+pub fn combinations(model: &Model) -> Vec<(ElementId, &str)> {
+    let mut out: Vec<_> = model
+        .iter()
+        .filter(|e| matches!(e.kind, ElementKind::Combination(_)))
+        .map(|e| (e.id, e.name.as_str()))
+        .collect();
+    out.sort_by(|a, b| a.1.cmp(b.1));
+    out
+}
+
+/// A name not used yet: `base`, else `base 2`, `base 3`...
+fn free_name(model: &Model, base: &str) -> String {
+    let taken = |n: &str| model.iter().any(|e| e.name == n);
+    let mut name = base.to_string();
+    let mut n = 2;
+    while taken(&name) {
+        name = format!("{base} {n}");
+        n += 1;
+    }
+    name
+}
+
+/// A new combination named `name` holding `view`'s sets as they are now;
+/// `view` then follows it. Returns the transaction and the combination.
+pub fn new_combination(model: &Model, name: &str, view: ElementId) -> (Transaction, ElementId) {
+    let hidden_sets = match model.get(view).map(|e| &e.kind) {
+        Some(ElementKind::View(v)) => v.hidden.sets.clone(),
+        _ => vec![],
+    };
+    let c = Element::new(
+        free_name(model, name),
+        ElementKind::Combination(Combination { hidden_sets }),
+    );
+    let id = c.id;
+    let tx = Transaction::new("New combination").insert(c);
+    let mut next = model.clone();
+    let mut tx = tx;
+    if tx.apply(&mut next).is_ok() {
+        tx.ops.extend(apply_combination(&next, id, view).ops);
+    }
+    tx.label = "New combination".into();
+    (tx, id)
+}
+
+/// Make `view` follow `combination`: its sets become the combination's.
+pub fn apply_combination(model: &Model, combination: ElementId, view: ElementId) -> Transaction {
+    let tx = Transaction::new("Apply combination");
+    let Some(ElementKind::Combination(c)) = model.get(combination).map(|e| &e.kind) else {
+        return tx;
+    };
+    let Some(e) = model.get(view) else { return tx };
+    let mut after = e.clone();
+    let ElementKind::View(v) = &mut after.kind else {
+        return tx;
+    };
+    v.hidden.sets = c.hidden_sets.clone();
+    v.hidden.combination = Some(combination);
+    if after == *e {
+        return tx;
+    }
+    tx.replace(e.clone(), after)
+}
+
+/// Store `view`'s sets as they are now in `combination`; every view
+/// following it, and `view` itself, take them.
+pub fn update_combination(model: &Model, combination: ElementId, view: ElementId) -> Transaction {
+    let tx = Transaction::new("Update combination");
+    let Some(ElementKind::View(v)) = model.get(view).map(|e| &e.kind) else {
+        return tx;
+    };
+    let hidden_sets = v.hidden.sets.clone();
+    let Some(e) = model.get(combination) else {
+        return tx;
+    };
+    let ElementKind::Combination(c) = &e.kind else {
+        return tx;
+    };
+    let mut tx = tx;
+    if c.hidden_sets != hidden_sets {
+        let mut after = e.clone();
+        after.kind = ElementKind::Combination(Combination {
+            hidden_sets: hidden_sets.clone(),
+        });
+        tx = tx.replace(e.clone(), after);
+    }
+    for m in model.iter() {
+        let ElementKind::View(mv) = &m.kind else {
+            continue;
+        };
+        if m.id != view && mv.hidden.combination != Some(combination) {
+            continue;
+        }
+        let mut after = m.clone();
+        if let ElementKind::View(av) = &mut after.kind {
+            av.hidden.sets = hidden_sets.clone();
+            av.hidden.combination = Some(combination);
+        }
+        if after != *m {
+            tx = tx.replace(m.clone(), after);
+        }
+    }
+    tx
+}
+
+/// The views following `combination`, by name.
+pub fn combination_views(model: &Model, combination: ElementId) -> Vec<String> {
+    let mut out: Vec<String> = model
+        .iter()
+        .filter(|e| {
+            matches!(&e.kind, ElementKind::View(v) if v.hidden.combination == Some(combination))
+        })
+        .map(|e| e.name.clone())
+        .collect();
+    out.sort();
+    out
+}
+
+/// Give a combination a new name.
+pub fn rename_combination(model: &Model, combination: ElementId, name: &str) -> Transaction {
+    let tx = Transaction::new("Rename combination");
+    match model.get(combination) {
+        Some(e) if matches!(e.kind, ElementKind::Combination(_)) && e.name != name => {
+            let mut after = e.clone();
+            after.name = name.to_string();
+            tx.replace(e.clone(), after)
+        }
+        _ => tx,
+    }
+}
+
+/// Delete `combination`: views following it keep its sets as their own.
+pub fn delete_combination(model: &Model, combination: ElementId) -> Transaction {
+    let mut tx = Transaction::new("Delete combination");
+    if !matches!(
+        model.get(combination).map(|e| &e.kind),
+        Some(ElementKind::Combination(_))
+    ) {
+        return tx;
+    }
+    for e in model.iter() {
+        if let ElementKind::View(v) = &e.kind {
+            if v.hidden.combination == Some(combination) {
+                let mut after = e.clone();
+                if let ElementKind::View(av) = &mut after.kind {
+                    av.hidden.combination = None;
+                }
+                tx = tx.replace(e.clone(), after);
+            }
+        }
+    }
+    tx.remove_cascade(model, combination)
+}
+
+/// A copy of `view` named "<view> – <combination>", following
+/// `combination`; `view` itself is left as it is. Returns the transaction
+/// and the new view.
+pub fn view_from_combination(
+    model: &Model,
+    combination: ElementId,
+    view: ElementId,
+) -> Option<(Transaction, ElementId)> {
+    let c = model.get(combination)?;
+    let ElementKind::Combination(k) = &c.kind else {
+        return None;
+    };
+    let v = model.get(view)?;
+    let ElementKind::View(_) = &v.kind else {
+        return None;
+    };
+    // the view with what belongs to it (crop box, notes...), as Duplicate
+    let elements: Vec<Element> = crate::transform::copy_set(model, &[view])
+        .iter()
+        .filter_map(|id| model.get(*id))
+        .cloned()
+        .collect();
+    let at = elements.iter().position(|e| e.id == view)?;
+    let (mut copies, _) = crate::transform::fresh_copies(model, &elements);
+    let copy = &mut copies[at];
+    copy.name = free_name(model, &format!("{} – {}", v.name, c.name));
+    if let ElementKind::View(cv) = &mut copy.kind {
+        cv.hidden.sets = k.hidden_sets.clone();
+        cv.hidden.combination = Some(combination);
+    }
+    let id = copy.id;
+    let mut tx = Transaction::new("New view from combination");
+    for c in copies {
+        tx = tx.insert(c);
+    }
+    Some((tx, id))
+}
+
 /// A new folder named `name` in `parent`, to insert into the model.
 pub fn new_folder(name: &str, parent: Option<ElementId>) -> Element {
     Element::new(name, ElementKind::SetFolder(SetFolder { parent }))
@@ -166,10 +368,10 @@ pub fn duplicate(model: &Model, set: ElementId) -> Option<(Transaction, ElementI
         if m.sets.contains(&set) {
             after.sets.push(id);
         }
-        if let ElementKind::View(v) = &mut after.kind {
-            if v.hidden.sets.contains(&set) {
-                v.hidden.sets.push(id);
-            }
+        match &mut after.kind {
+            ElementKind::View(v) if v.hidden.sets.contains(&set) => v.hidden.sets.push(id),
+            ElementKind::Combination(c) if c.hidden_sets.contains(&set) => c.hidden_sets.push(id),
+            _ => {}
         }
         if after != *m {
             tx = tx.replace(m.clone(), after);
@@ -285,6 +487,7 @@ pub fn delete(model: &Model, set: ElementId) -> Transaction {
         after.sets.retain(|s| *s != set);
         match &mut after.kind {
             ElementKind::View(v) => v.hidden.sets.retain(|s| *s != set),
+            ElementKind::Combination(c) => c.hidden_sets.retain(|s| *s != set),
             ElementKind::StylePack(p) => {
                 for t in &mut p.templates {
                     t.hidden_sets.retain(|s| *s != set);
@@ -475,5 +678,87 @@ mod tests {
         e2.sets.push(s.id);
         let back: Element = serde_json::from_str(&serde_json::to_string(&e2).unwrap()).unwrap();
         assert_eq!(back.sets, vec![s.id]);
+    }
+
+    #[test]
+    fn combinations_keep_the_working_view_whole_and_drive_their_views() {
+        let a = new_set("Dimensions");
+        let b = new_set("Furniture");
+        let mut doc = crate::Document::from_model(sample_house());
+        let plan = doc
+            .model()
+            .iter()
+            .find(|e| matches!(e.kind, ElementKind::View(_)))
+            .unwrap()
+            .clone();
+        let mut whole = plan.clone();
+        if let ElementKind::View(v) = &mut whole.kind {
+            v.hidden = ViewHidden::default();
+        }
+        doc.commit(
+            Transaction::new("x")
+                .insert(a.clone())
+                .insert(b.clone())
+                .replace(plan.clone(), whole),
+        )
+        .unwrap();
+        let view = |doc: &crate::Document, id| match &doc.model().get(id).unwrap().kind {
+            ElementKind::View(v) => v.hidden.clone(),
+            _ => unreachable!(),
+        };
+        // switch Dimensions off, save it as a combination
+        let mut e = doc.model().get(plan.id).unwrap().clone();
+        if let ElementKind::View(v) = &mut e.kind {
+            v.hidden.set_set(a.id, true);
+        }
+        doc.commit(Transaction::new("off").replace(doc.model().get(plan.id).unwrap().clone(), e))
+            .unwrap();
+        let (tx, c) = new_combination(doc.model(), "Presentation", plan.id);
+        doc.commit(tx).unwrap();
+        assert_eq!(view(&doc, plan.id).combination, Some(c));
+        // a switch by hand lets go of it
+        let mut e = doc.model().get(plan.id).unwrap().clone();
+        if let ElementKind::View(v) = &mut e.kind {
+            v.hidden.set_set(a.id, false);
+        }
+        doc.commit(Transaction::new("on").replace(doc.model().get(plan.id).unwrap().clone(), e))
+            .unwrap();
+        assert_eq!(view(&doc, plan.id), ViewHidden::default(), "whole again");
+        // a new view from it; the working view stays whole
+        let (tx, copy) = view_from_combination(doc.model(), c, plan.id).unwrap();
+        doc.commit(tx).unwrap();
+        assert_eq!(view(&doc, copy).sets, vec![a.id]);
+        assert_eq!(view(&doc, copy).combination, Some(c));
+        assert!(view(&doc, plan.id).sets.is_empty());
+        assert!(doc
+            .model()
+            .get(copy)
+            .unwrap()
+            .name
+            .ends_with("– Presentation"));
+        assert_eq!(combination_views(doc.model(), c).len(), 1);
+        // change the combination from a view: its views follow
+        let mut e = doc.model().get(plan.id).unwrap().clone();
+        if let ElementKind::View(v) = &mut e.kind {
+            v.hidden.set_set(b.id, true);
+        }
+        doc.commit(Transaction::new("b").replace(doc.model().get(plan.id).unwrap().clone(), e))
+            .unwrap();
+        doc.commit(update_combination(doc.model(), c, plan.id))
+            .unwrap();
+        assert_eq!(view(&doc, copy).sets, vec![b.id]);
+        // a deleted set leaves the combination
+        doc.commit(delete(doc.model(), b.id)).unwrap();
+        let ElementKind::Combination(k) = &doc.model().get(c).unwrap().kind else {
+            unreachable!()
+        };
+        assert!(k.hidden_sets.is_empty());
+        // deleting the combination: views keep their sets, free
+        doc.commit(rename_combination(doc.model(), c, "Print"))
+            .unwrap();
+        doc.commit(delete_combination(doc.model(), c)).unwrap();
+        assert!(doc.model().get(c).is_none());
+        assert_eq!(view(&doc, copy).combination, None);
+        assert!(combinations(doc.model()).is_empty());
     }
 }
