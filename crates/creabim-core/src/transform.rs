@@ -503,7 +503,8 @@ pub fn transformed(model: &Model, e: &Element, t: &Xform) -> Option<Element> {
         | ElementKind::Join(_)
         | ElementKind::ElementType(_)
         | ElementKind::GridGroup(_)
-        | ElementKind::Set(_) => return None,
+        | ElementKind::Set(_)
+        | ElementKind::SetFolder(_) => return None,
     }
     Some(out)
 }

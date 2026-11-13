@@ -500,6 +500,7 @@ fn build_scene_unjoined(
             | ElementKind::CropBox(_)
             | ElementKind::GridGroup(_)
             | ElementKind::Set(_)
+            | ElementKind::SetFolder(_)
             | ElementKind::Room(_)
             | ElementKind::RoomSeparator(_)
             | ElementKind::Join(_)

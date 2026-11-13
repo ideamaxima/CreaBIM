@@ -83,7 +83,8 @@ impl Element {
             ElementKind::Level(_)
             | ElementKind::Grid(_)
             | ElementKind::GridGroup(_)
-            | ElementKind::Set(_) => vec![],
+            | ElementKind::Set(_)
+            | ElementKind::SetFolder(_) => vec![],
             // a top level and attached roofs are soft: when one goes the wall
             // keeps the height it had
             ElementKind::Wall(w) => vec![w.level],
@@ -179,6 +180,7 @@ impl Element {
             ElementKind::Material(_) => "IfcMaterial",
             ElementKind::Assembly(_) => "IfcMaterialLayerSet",
             ElementKind::Set(_) => "Set",
+            ElementKind::SetFolder(_) => "SetFolder",
             ElementKind::Dimension(_) => "Dimension",
             ElementKind::Tag(_) => "Tag",
             ElementKind::Note(_) => "Note",
@@ -380,7 +382,7 @@ impl Element {
             ElementKind::StylePack(p) => p.validate(),
             ElementKind::CropBox(c) => c.validate(),
             ElementKind::Assembly(a) => a.validate(),
-            ElementKind::Set(_) => Ok(()),
+            ElementKind::Set(_) | ElementKind::SetFolder(_) => Ok(()),
             ElementKind::ElementType(t) => t.validate(),
             ElementKind::Shaft(s) => s.validate(),
             ElementKind::Object(o) => o.validate(),
@@ -497,6 +499,8 @@ pub enum ElementKind {
     /// A set the user made (a layer): elements of any category list it in
     /// their `sets`, and views can switch it off.
     Set(crate::sets::Set),
+    /// A folder of the user's sets.
+    SetFolder(crate::sets::SetFolder),
 }
 
 impl ElementKind {
@@ -528,6 +532,7 @@ impl ElementKind {
             ElementKind::SheetTemplate(_) => "SheetTemplate",
             ElementKind::GridGroup(_) => "GridGroup",
             ElementKind::Set(_) => "Set",
+            ElementKind::SetFolder(_) => "SetFolder",
             ElementKind::Assembly(_) => "Assembly",
             ElementKind::Units(_) => "Units",
             ElementKind::Project(_) => "Project information",
