@@ -34,6 +34,10 @@ pub(super) struct AreaState {
     pub naming: Option<String>,
     /// The last drawing (not a sheet) worked in, for workspaces.
     pub drawing: Option<ElementId>,
+    /// The last view open of each group of the browser (Floor plans,
+    /// Sections…), by the group's title: switching an area back to a
+    /// group opens it, not the group's first.
+    pub last_in_group: HashMap<&'static str, ElementId>,
     /// The area whose header menu is open: what it picks goes there, not
     /// to the area with focus (MU32: switching one area's plan switched
     /// the other's).
@@ -57,6 +61,7 @@ impl Default for AreaState {
             hovered: None,
             naming: None,
             drawing: None,
+            last_in_group: HashMap::new(),
             menu_area: None,
         }
     }
@@ -437,8 +442,8 @@ impl CreaBimApp {
                 .or(current),
         };
         self.areas.seen = self.active_view;
-        if let Some(v) = self.active_view.filter(|v| !self.is_sheet(*v)) {
-            self.areas.drawing = Some(v);
+        if let Some(v) = self.active_view {
+            self.note_view_open(v);
         }
         // the area under the pointer is outlined: keys and tools act there
         if n > 1 {
@@ -919,6 +924,18 @@ impl CreaBimApp {
     }
 
     /// The group a view is listed in ("Floor plans", "Sheets"…).
+    /// `v` is the view open now: the last of its group, and the last
+    /// drawing when it is not a sheet.
+    pub(super) fn note_view_open(&mut self, v: ElementId) {
+        if !self.is_sheet(v) {
+            self.areas.drawing = Some(v);
+        }
+        let g = self.group_title(v);
+        if self.areas.last_in_group.get(g) != Some(&v) {
+            self.areas.last_in_group.insert(g, v);
+        }
+    }
+
     fn group_title(&self, v: ElementId) -> &'static str {
         if self.is_sheet(v) {
             return "Sheets";
@@ -960,7 +977,13 @@ impl CreaBimApp {
                     _ => "",
                 };
                 for (g, ids) in crate::browser::view_groups(self.doc.model()) {
-                    if let Some(first) = ids.first() {
+                    // the group's view last open, else its first
+                    let last = self
+                        .areas
+                        .last_in_group
+                        .get(g.title())
+                        .filter(|v| ids.contains(v));
+                    if let Some(first) = last.or(ids.first()) {
                         items.push(
                             Item::new(format!("area.show:{}", first.0), g.title())
                                 .checked(title == g.title())
@@ -1644,6 +1667,32 @@ fn mode_button(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn switching_an_area_back_to_floor_plans_opens_the_last_plan_seen() {
+        let mut app = crate::app::test_app();
+        let plans = crate::browser::view_groups(app.doc.model())
+            .into_iter()
+            .find(|(g, _)| *g == crate::browser::ViewGroup::Plans)
+            .map(|(_, ids)| ids)
+            .unwrap();
+        assert!(plans.len() > 1, "the sample has more than one plan");
+        let item_for = |app: &crate::app::CreaBimApp| {
+            app.area_menu("area.kind")
+                .unwrap()
+                .into_iter()
+                .find_map(|i| match i {
+                    Item::Action { id, label, .. } if label == "Floor plans" => Some(id),
+                    _ => None,
+                })
+                .unwrap()
+        };
+        // nothing seen yet: the first plan
+        assert_eq!(item_for(&app), format!("area.show:{}", plans[0].0));
+        // the second plan was open, then the area showed 3D: back to it
+        app.note_view_open(plans[1]);
+        assert_eq!(item_for(&app), format!("area.show:{}", plans[1].0));
+    }
 
     #[test]
     fn workspaces_fill_in_the_drawing_and_its_sheet() {
