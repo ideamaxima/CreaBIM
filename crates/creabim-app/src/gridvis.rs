@@ -1140,56 +1140,22 @@ impl CreaBimApp {
                         }
                     });
                     }
-                let any_sets = self
-                    .doc
-                    .model()
-                    .iter()
-                    .any(|e| matches!(e.kind, ElementKind::Set(_)));
-                if any_sets && crate::props::subsection(ui, "vis.sets", "Sets", true) {
-                    let mut ask: Option<(Vec<ElementId>, bool)> = None;
-                    let all: Vec<ElementId> = creabim_core::sets::sets(self.doc.model())
-                        .into_iter()
-                        .map(|(s, _)| s)
-                        .collect();
-                    let off = all.iter().filter(|s| h.sets.contains(s)).count();
-                    let mut on = off == 0;
-                    if ui
-                        .add(
-                            egui::Checkbox::new(&mut on, "All sets")
-                                .indeterminate(off > 0 && off < all.len()),
-                        )
-                        .clicked()
-                    {
-                        ask = Some((all, off == 0));
-                    }
-                    panel_set_rows(
-                        ui,
-                        self.doc.model(),
-                        &h,
-                        &mut self.sets.closed,
-                        None,
-                        0,
-                        &mut ask,
-                    );
-                    ui.add_space(3.0);
-                    if crate::props::row(ui, "", |ui| {
-                        ui.button("Manage sets…")
-                            .on_hover_text("Make, rename, move and delete sets and folders")
-                            .clicked()
-                    }) {
-                        extra = Some("sets");
-                    }
-                    if let Some((ids, hide)) = ask {
-                        let label = if hide { "Hide sets" } else { "Show sets" };
-                        change = Some((
-                            label.into(),
-                            Box::new(move |h| {
-                                for s in ids {
-                                    h.set_set(s, hide);
-                                }
-                            }),
-                        ));
-                    }
+                // its own function: inline, this function grew past what
+                // rustc's optimiser can take on its default stack
+                let (ask, manage) = self.visibility_sets(ui, &h);
+                if manage {
+                    extra = Some("sets");
+                }
+                if let Some((ids, hide)) = ask {
+                    let label = if hide { "Hide sets" } else { "Show sets" };
+                    change = Some((
+                        label.into(),
+                        Box::new(move |h| {
+                            for s in ids {
+                                h.set_set(s, hide);
+                            }
+                        }),
+                    ));
                 }
                 let hidden: Vec<(ElementId, String)> = h
                     .elements
@@ -1250,6 +1216,53 @@ impl CreaBimApp {
             }
             _ => {}
         }
+    }
+
+    /// The Sets of a Visibility panel, when the project has any: what was
+    /// switched (the sets, and true to hide them) and whether Manage sets
+    /// was clicked.
+    fn visibility_sets(
+        &mut self,
+        ui: &mut egui::Ui,
+        h: &ViewHidden,
+    ) -> (Option<(Vec<ElementId>, bool)>, bool) {
+        let mut ask: Option<(Vec<ElementId>, bool)> = None;
+        let any = self
+            .doc
+            .model()
+            .iter()
+            .any(|e| matches!(e.kind, ElementKind::Set(_)));
+        if !any || !crate::props::subsection(ui, "vis.sets", "Sets", true) {
+            return (None, false);
+        }
+        let all: Vec<ElementId> = creabim_core::sets::sets(self.doc.model())
+            .into_iter()
+            .map(|(s, _)| s)
+            .collect();
+        let off = all.iter().filter(|s| h.sets.contains(s)).count();
+        let mut on = off == 0;
+        if ui
+            .add(egui::Checkbox::new(&mut on, "All sets").indeterminate(off > 0 && off < all.len()))
+            .clicked()
+        {
+            ask = Some((all, off == 0));
+        }
+        panel_set_rows(
+            ui,
+            self.doc.model(),
+            h,
+            &mut self.sets.closed,
+            None,
+            0,
+            &mut ask,
+        );
+        ui.add_space(3.0);
+        let manage = crate::props::row(ui, "", |ui| {
+            ui.button("Manage sets…")
+                .on_hover_text("Make, rename, move and delete sets and folders")
+                .clicked()
+        });
+        (ask, manage)
     }
 
     /// Every grid system, with the one new lines go in, and a button for a
