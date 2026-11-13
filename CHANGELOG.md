@@ -58,6 +58,8 @@ Issue and pull request numbers refer to the upstream repository.
   large it was left.
 
 ### Fixed
+- Levels window: changing a storey's Height no longer pushes its row down
+  (the Fit button now sits beside the gap).
 - Plans: lines in the fine pen (furniture and fixtures) are drawn in the
   same light grey as closed outlines, so an object drawn with lines and one
   drawn with polylines look alike.
