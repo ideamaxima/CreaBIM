@@ -347,34 +347,7 @@ impl CreaBimApp {
                             }
                         }
                     }
-                    crate::props::flow(ui, |ui| {
-                        ui.menu_button("Duplicate", |ui| {
-                            if ui.button("The level only").clicked() {
-                                asks.push(Ask::Duplicate(*id, false));
-                                ui.close();
-                            }
-                            if ui
-                                .button("With everything on it")
-                                .on_hover_text(
-                                    "Walls, slabs, doors, windows and the rest, one storey up",
-                                )
-                                .clicked()
-                            {
-                                asks.push(Ask::Duplicate(*id, true));
-                                ui.close();
-                            }
-                        })
-                        .response
-                        .on_hover_text("A copy above the top level");
-                        let can = list.len() > 1;
-                        if ui
-                            .add_enabled(can, egui::Button::new("Delete"))
-                            .on_disabled_hover_text("A project keeps at least one level")
-                            .clicked()
-                        {
-                            asks.push(Ask::Delete(*id));
-                        }
-                    });
+                    row_actions(ui, *id, list.len() > 1, asks);
                     ui.end_row();
                 }
             });
@@ -952,6 +925,36 @@ fn to_next(ui: &mut egui::Ui, gap: f64, above: &str, fit: bool) -> bool {
     .inner
 }
 
+/// A level's Duplicate and Delete, side by side: wrapping them would make
+/// the whole row taller.
+fn row_actions(ui: &mut egui::Ui, id: ElementId, can_delete: bool, asks: &mut Vec<Ask>) {
+    ui.horizontal(|ui| {
+        ui.menu_button("Duplicate", |ui| {
+            if ui.button("The level only").clicked() {
+                asks.push(Ask::Duplicate(id, false));
+                ui.close();
+            }
+            if ui
+                .button("With everything on it")
+                .on_hover_text("Walls, slabs, doors, windows and the rest, one storey up")
+                .clicked()
+            {
+                asks.push(Ask::Duplicate(id, true));
+                ui.close();
+            }
+        })
+        .response
+        .on_hover_text("A copy above the top level");
+        if ui
+            .add_enabled(can_delete, egui::Button::new("Delete"))
+            .on_disabled_hover_text("A project keeps at least one level")
+            .clicked()
+        {
+            asks.push(Ask::Delete(id));
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -976,5 +979,22 @@ mod tests {
             heights[0],
             heights[1]
         );
+    }
+
+    /// Duplicate and Delete keep to one line however narrow their column
+    /// (todo 5, with lengths in millimetres).
+    #[test]
+    fn duplicate_and_delete_stay_on_one_line() {
+        let ctx = egui::Context::default();
+        let mut height = 0.0;
+        let mut asks = vec![];
+        let _ = ctx.run_ui(Default::default(), |ui| {
+            let line = ui.spacing().interact_size.y;
+            let r = ui.allocate_ui(egui::vec2(40.0, 100.0), |ui| {
+                row_actions(ui, ElementId::new(), true, &mut asks);
+            });
+            height = r.response.rect.height() / line;
+        });
+        assert!(height < 1.5, "the actions took {height} lines");
     }
 }
