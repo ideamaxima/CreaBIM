@@ -315,21 +315,10 @@ impl CreaBimApp {
                     match list.get(i + 1) {
                         Some((_, above, a)) => {
                             let gap = a.elevation - l.elevation;
-                            crate::props::flow(ui, |ui| {
-                                ui.label(crate::units::len(gap))
-                                    .on_hover_text(format!("From here up to {above}"));
-                                if (gap - l.height).abs() > 1e-6
-                                    && gap > 0.5
-                                    && ui
-                                        .small_button("Fit")
-                                        .on_hover_text(format!(
-                                            "Make the storey as tall as the gap up to {above}"
-                                        ))
-                                        .clicked()
-                                {
-                                    asks.push(Ask::Set(*id, l.elevation, gap));
-                                }
-                            });
+                            let fit = (gap - l.height).abs() > 1e-6 && gap > 0.5;
+                            if to_next(ui, gap, above, fit) {
+                                asks.push(Ask::Set(*id, l.elevation, gap));
+                            }
                         }
                         None => {
                             ui.label(egui::RichText::new("top").weak());
@@ -946,4 +935,46 @@ fn nearest(list: &[(ElementId, String, creabim_core::Level)], id: ElementId) -> 
                 .then(a.2.elevation.total_cmp(&b.2.elevation))
         })
         .map(|(i, ..)| *i)
+}
+
+/// The "To next" cell: the gap up to the level above and, when the storey
+/// isn't as tall as that, a Fit button. True when Fit is clicked.
+fn to_next(ui: &mut egui::Ui, gap: f64, above: &str, fit: bool) -> bool {
+    // one line: Fit wrapping under the gap would make the whole row taller
+    ui.horizontal(|ui| {
+        ui.label(crate::units::len(gap))
+            .on_hover_text(format!("From here up to {above}"));
+        fit && ui
+            .small_button("Fit")
+            .on_hover_text(format!("Make the storey as tall as the gap up to {above}"))
+            .clicked()
+    })
+    .inner
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Fit showing up must not make the row taller (todo 5): the cell keeps
+    /// to one line however narrow its column.
+    #[test]
+    fn fit_stays_beside_the_gap_on_one_line() {
+        let ctx = egui::Context::default();
+        let mut heights = vec![];
+        let _ = ctx.run_ui(Default::default(), |ui| {
+            for fit in [false, true] {
+                let r = ui.allocate_ui(egui::vec2(40.0, 100.0), |ui| {
+                    to_next(ui, 3.0, "First Floor", fit);
+                });
+                heights.push(r.response.rect.height());
+            }
+        });
+        assert!(
+            heights[1] <= heights[0] + 1.0,
+            "row grew from {} to {} with Fit",
+            heights[0],
+            heights[1]
+        );
+    }
 }
