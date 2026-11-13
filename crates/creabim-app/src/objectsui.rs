@@ -27,12 +27,16 @@ pub(super) struct CatalogueUi {
     thumbs: HashMap<String, egui::TextureHandle>,
     /// The name the selection is saved under.
     save_name: String,
+    /// The height typed for an object made from a DXF drawing.
+    dxf_height: String,
 }
 
 /// What a click in the window asks for.
 enum CatAsk {
     Place(Box<CatalogueObject>, Option<ElementId>),
     Import,
+    /// A DXF drawing as a plan-only object this tall.
+    ImportDxf(f64),
     SaveSelection,
     Delete(String),
     Reveal,
@@ -108,6 +112,11 @@ pub(super) fn delete_from(dir: &Path, key: &str) -> std::io::Result<()> {
 /// A picture of `c`: its parts in their colours, seen from the front,
 /// a little to the right and above, drawn in software.
 pub(super) fn thumbnail(c: &CatalogueObject, size: usize) -> egui::ColorImage {
+    // an object drawn for plans shows its drawing, seen from above
+    let plan_only = matches!(c.object.parts.as_slice(), [p] if p.name == objects::PLAN_BOX);
+    if plan_only && !c.object.symbol.is_empty() {
+        return plan_thumbnail(&c.object.symbol, size);
+    }
     let ss = 2;
     let n = size * ss;
     let d = DVec3::new(-0.55, 1.0, -0.75).normalize();
@@ -232,6 +241,77 @@ pub(super) fn thumbnail(c: &CatalogueObject, size: usize) -> egui::ColorImage {
                 (acc[2] / k) as u8,
                 (acc[3] / k) as u8,
             ));
+        }
+    }
+    egui::ColorImage::new([size, size], px)
+}
+
+/// A picture of a plan symbol: its lines, seen from above, mid grey so
+/// they read on light and dark themes alike.
+pub(super) fn plan_thumbnail(symbol: &[objects::SymbolItem], size: usize) -> egui::ColorImage {
+    use objects::SymbolItem;
+    let ss = 3;
+    let n = size * ss;
+    let segs: Vec<(glam::DVec2, glam::DVec2)> = symbol
+        .iter()
+        .flat_map(|it| match it {
+            SymbolItem::Line(a, b) => vec![(*a, *b)],
+            SymbolItem::Loop(p) => (0..p.len()).map(|i| (p[i], p[(i + 1) % p.len()])).collect(),
+        })
+        .collect();
+    let mut img = vec![0u8; n * n];
+    let Some(first) = segs.first().map(|s| s.0) else {
+        return egui::ColorImage::new([size, size], vec![egui::Color32::TRANSPARENT; size * size]);
+    };
+    let (lo, hi) = segs.iter().fold((first, first), |(lo, hi), (a, b)| {
+        (lo.min(*a).min(*b), hi.max(*a).max(*b))
+    });
+    let span = (hi.x - lo.x).max(hi.y - lo.y).max(1e-6);
+    let scale = n as f64 * 0.88 / span;
+    let mid = (lo + hi) / 2.0;
+    let to_px = |p: glam::DVec2| {
+        glam::DVec2::new(
+            (p.x - mid.x) * scale + n as f64 / 2.0,
+            n as f64 / 2.0 - (p.y - mid.y) * scale,
+        )
+    };
+    // a pen about one picture pixel wide
+    let half = ss as f64 * 0.6;
+    for (a, b) in &segs {
+        let (a, b) = (to_px(*a), to_px(*b));
+        let x0 = (a.x.min(b.x) - half).floor().max(0.0) as usize;
+        let y0 = (a.y.min(b.y) - half).floor().max(0.0) as usize;
+        let x1 = ((a.x.max(b.x) + half).ceil() as usize).min(n - 1);
+        let y1 = ((a.y.max(b.y) + half).ceil() as usize).min(n - 1);
+        let d = b - a;
+        let len2 = d.length_squared();
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                let p = glam::DVec2::new(x as f64 + 0.5, y as f64 + 0.5);
+                let t = if len2 > 0.0 {
+                    ((p - a).dot(d) / len2).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                if p.distance(a + d * t) <= half {
+                    img[y * n + x] = 255;
+                }
+            }
+        }
+    }
+    let grey = 150u32;
+    let mut px = Vec::with_capacity(size * size);
+    for y in 0..size {
+        for x in 0..size {
+            let mut a = 0u32;
+            for dy in 0..ss {
+                for dx in 0..ss {
+                    a += img[(y * ss + dy) * n + x * ss + dx] as u32;
+                }
+            }
+            let a = a / (ss * ss) as u32;
+            let c = (grey * a / 255) as u8;
+            px.push(egui::Color32::from_rgba_premultiplied(c, c, c, a as u8));
         }
     }
     egui::ColorImage::new([size, size], px)
@@ -770,6 +850,29 @@ impl CreaBimApp {
                     {
                         asks.push(CatAsk::Import);
                     }
+                    ui.label("Height");
+                    let r = ui.add(
+                        egui::TextEdit::singleline(&mut cat.dxf_height)
+                            .hint_text(crate::units::len(0.4))
+                            .desired_width(70.0)
+                            .vertical_align(egui::Align::Center),
+                    );
+                    let h = match cat.dxf_height.trim() {
+                        "" => Some(0.4),
+                        t => crate::modal::parse_length(t).filter(|h| *h > 0.0),
+                    };
+                    if h.is_none() {
+                        r.on_hover_text("A length above zero, as 400 or 40cm");
+                    }
+                    if ui
+                        .add_enabled(h.is_some(), egui::Button::new("Import DXF as plan symbol…"))
+                        .on_hover_text("A DXF drawing becomes one object: its lines are what plans show, its point 0,0 where it is placed from, and a plain box this tall stands for it in 3D")
+                        .clicked()
+                    {
+                        if let Some(h) = h {
+                            asks.push(CatAsk::ImportDxf(h));
+                        }
+                    }
                     if ui
                         .small_button("Open folder")
                         .on_hover_text("Where your catalogue is kept: one .json file per object")
@@ -834,6 +937,16 @@ impl CreaBimApp {
                 };
                 self.import_object(&path);
             }
+            CatAsk::ImportDxf(height) => {
+                let Some(path) = rfd::FileDialog::new()
+                    .set_title("Import a DXF drawing as an object")
+                    .add_filter("DXF drawings", &["dxf", "DXF"])
+                    .pick_file()
+                else {
+                    return;
+                };
+                self.import_dxf_object(&path, height);
+            }
             CatAsk::SaveSelection => {
                 let Some(dir) = user_dir() else {
                     self.status = "There is no settings folder to keep the catalogue in.".into();
@@ -892,6 +1005,48 @@ impl CreaBimApp {
     }
 
     /// Read a file as a new object of the user's catalogue.
+    /// A DXF drawing as a plan-only object of the user's catalogue.
+    pub(super) fn import_dxf_object(&mut self, path: &Path, height: f64) {
+        let Some(dir) = user_dir() else {
+            self.status = "There is no settings folder to keep the catalogue in.".into();
+            return;
+        };
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("object")
+            .to_string();
+        let key = free_key(&dir, &stem);
+        let name = stem.replace(['_', '-'], " ");
+        let read = std::fs::read(path)
+            .map_err(|e| e.to_string())
+            .and_then(|b| {
+                creabim_exchange::catalogue::read_dxf(&b, &name, &key, height)
+                    .map_err(|e| e.to_string())
+            });
+        match read {
+            Ok(c) => match save_to(&dir, &c) {
+                Ok(_) => {
+                    let s = c.object.size();
+                    self.status = format!(
+                        "Added {} to your catalogue: {} lines in plan, {} × {}, {} tall, as {}. Click it to place it.",
+                        c.name,
+                        c.object.symbol.len(),
+                        crate::units::len(s.x),
+                        crate::units::len(s.y),
+                        crate::units::len(s.z),
+                        c.object.ifc.class
+                    );
+                    self.catalogue.user = None;
+                    self.catalogue.open = true;
+                    self.catalogue.category = None;
+                }
+                Err(e) => self.status = format!("Couldn't save it: {e}"),
+            },
+            Err(e) => self.status = format!("Couldn't read it: {e}"),
+        }
+    }
+
     pub(super) fn import_object(&mut self, path: &Path) {
         let Some(dir) = user_dir() else {
             self.status = "There is no settings folder to keep the catalogue in.".into();
@@ -967,6 +1122,22 @@ mod tests {
         assert!(solid > 48 * 48 / 8, "{solid}");
         // and leaves the background clear
         assert_eq!(img.pixels[0].a(), 0);
+    }
+
+    #[test]
+    fn a_plan_symbol_is_pictured_from_above() {
+        use objects::SymbolItem;
+        let symbol = vec![SymbolItem::Loop(vec![
+            glam::DVec2::new(0.0, 0.0),
+            glam::DVec2::new(0.4, 0.0),
+            glam::DVec2::new(0.4, -0.6),
+            glam::DVec2::new(0.0, -0.6),
+        ])];
+        let img = plan_thumbnail(&symbol, THUMB);
+        let drawn = img.pixels.iter().filter(|p| p.a() > 0).count();
+        // an outline: some pixels, the middle left empty
+        assert!(drawn > 50, "{drawn}");
+        assert_eq!(img.pixels[(THUMB / 2) * THUMB + THUMB / 2].a(), 0);
     }
 
     #[test]

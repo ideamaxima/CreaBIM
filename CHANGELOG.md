@@ -15,6 +15,11 @@ Issue and pull request numbers refer to the upstream repository.
   aside); the Sets window says so in red as you type.
 
 ### Added
+- Objects from DXF drawings: in the Catalogue, type a height and *Import DXF
+  as plan symbol…*. The drawing (blocks exploded, text and hatches left
+  out) is what plans show, its point 0,0 is where the object is placed
+  from, and a plain box that tall stands for it in 3D and IFC. Its picture
+  in the catalogue is the drawing, seen from above.
 - Combinations of sets, like ArchiCAD's layer combinations: in the Sets
   window, save which sets are on and off in a view under a name, and pick
   one for the open view with its radio button. Switching sets by hand marks

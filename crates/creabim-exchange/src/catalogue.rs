@@ -120,6 +120,94 @@ pub fn object(
     })
 }
 
+/// A plan-only object from a DXF drawing: its lines (blocks exploded,
+/// arcs as short segments) are the plan symbol, its point (0,0) where the
+/// object is placed from, and a plain box over the drawing, `height` tall,
+/// stands for it in 3D. Text, hatches and dimensions are left out.
+pub fn read_dxf(
+    bytes: &[u8],
+    name: &str,
+    key: &str,
+    height: f64,
+) -> Result<CatalogueObject, ExchangeError> {
+    let text = crate::titleblock::dxf_text(bytes);
+    let items = crate::titleblock::dxf_items(&text).map_err(ExchangeError::Other)?;
+    let mut symbol = vec![];
+    for it in items {
+        let creabim_core::titleblock::TitleItem::Line { points, .. } = it else {
+            continue;
+        };
+        // the reader gives millimetres
+        let pts: Vec<glam::DVec2> = points.iter().map(|p| *p / 1000.0).collect();
+        if pts.len() < 2 {
+            continue;
+        }
+        let closed = pts.len() > 3 && pts[0].distance(pts[pts.len() - 1]) < 1e-9;
+        if closed {
+            symbol.push(objects::SymbolItem::Loop(pts[..pts.len() - 1].to_vec()));
+        } else {
+            for w in pts.windows(2) {
+                symbol.push(objects::SymbolItem::Line(w[0], w[1]));
+            }
+        }
+    }
+    let all: Vec<glam::DVec2> = symbol
+        .iter()
+        .flat_map(|s| match s {
+            objects::SymbolItem::Loop(p) => p.clone(),
+            objects::SymbolItem::Line(a, b) => vec![*a, *b],
+        })
+        .collect();
+    let Some(first) = all.first().copied() else {
+        return Err(ExchangeError::Other(
+            "the DXF has no lines, polylines, arcs or circles".into(),
+        ));
+    };
+    let (lo, hi) = all
+        .iter()
+        .fold((first, first), |(lo, hi), p| (lo.min(*p), hi.max(*p)));
+    let size = hi - lo;
+    if size.x < 1e-6 || size.y < 1e-6 {
+        return Err(ExchangeError::Other(
+            "the drawing has no width or no depth".into(),
+        ));
+    }
+    let height = height.max(0.001);
+    let centre = (lo + hi) / 2.0;
+    let mut mesh = creabim_core::EditMesh::cuboid(glam::DVec3::new(size.x, size.y, height));
+    for v in &mut mesh.vertices {
+        v.x += centre.x;
+        v.y += centre.y;
+    }
+    let (category, ifc, mount) = guess(name);
+    let mut chars = name.trim().chars();
+    let shown: String = chars
+        .next()
+        .map(|c| c.to_uppercase().chain(chars).collect())
+        .unwrap_or_else(|| "Object".into());
+    let mut c = CatalogueObject {
+        key: key.to_string(),
+        name: shown,
+        description: String::new(),
+        object: ObjectType {
+            category,
+            ifc,
+            mount,
+            offset: 0.0,
+            parts: vec![ObjectPart {
+                name: objects::PLAN_BOX.into(),
+                mesh,
+                material: None,
+            }],
+            symbol: vec![],
+            catalogue: Some(key.to_string()),
+        },
+        materials: vec![None],
+    };
+    c.object.symbol = symbol;
+    Ok(c)
+}
+
 /// What a thing called `words` probably is.
 pub fn guess(words: &str) -> (ObjectCategory, IfcKind, Mount) {
     use ObjectCategory as C;
@@ -339,5 +427,38 @@ mod tests {
         assert_eq!(guess("Radiators").1.class, "IfcSpaceHeater");
         assert_eq!(guess("Kitchen_Sink.001").1.predefined, "SINK");
         assert_eq!(guess("Dining chairs").1.predefined, "CHAIR");
+    }
+
+    #[test]
+    fn a_dxf_drawing_becomes_a_plan_symbol_on_a_box_from_its_own_origin() {
+        // a 400 × 600 mm outline drawn from its back corner, a line and a
+        // circle, with a text left out
+        let dxf = "0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n0\nLWPOLYLINE\n90\n4\n70\n1\n10\n0\n20\n0\n10\n400\n20\n0\n10\n400\n20\n-600\n10\n0\n20\n-600\n0\nLINE\n10\n0\n20\n-100\n11\n400\n21\n-100\n0\nCIRCLE\n10\n200\n20\n-350\n40\n100\n0\nTEXT\n10\n5\n20\n5\n40\n4\n1\nWC\n0\nENDSEC\n0\nEOF\n";
+        let c = read_dxf(dxf.as_bytes(), "toilet", "user/toilet", 0.4).unwrap();
+        assert!(c
+            .object
+            .symbol
+            .iter()
+            .any(|s| matches!(s, objects::SymbolItem::Loop(p) if p.len() == 4)));
+        assert!(c
+            .object
+            .symbol
+            .iter()
+            .any(|s| matches!(s, objects::SymbolItem::Line(..))));
+        let (lo, hi) = c.object.bounds();
+        assert!((lo.x - 0.0).abs() < 1e-9 && (hi.x - 0.4).abs() < 1e-9);
+        assert!(
+            (lo.y + 0.6).abs() < 1e-9 && hi.y.abs() < 1e-9,
+            "kept at its origin"
+        );
+        assert!((hi.z - 0.4).abs() < 1e-9 && lo.z.abs() < 1e-9);
+        assert_eq!(c.object.ifc.class, "IfcSanitaryTerminal");
+        assert!(read_dxf(
+            b"0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n",
+            "x",
+            "user/x",
+            1.0
+        )
+        .is_err());
     }
 }

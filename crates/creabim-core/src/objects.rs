@@ -482,6 +482,10 @@ impl Mount {
     }
 }
 
+/// The name of the one part of an object drawn for plans (a DXF drawing
+/// as its symbol, a plain box for 3D): such objects are pictured from above.
+pub const PLAN_BOX: &str = "Plan symbol box";
+
 /// One line of a plan symbol, in the object's own axes.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum SymbolItem {
