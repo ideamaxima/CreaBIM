@@ -19,6 +19,9 @@ Issue and pull request numbers refer to the upstream repository.
   aside); the Sets window says so in red as you type.
 
 ### Added
+- Masters take any paper size: Width and Height typed in Properties, or
+  A1's height with a length in A4 modules (210 mm each). Sheets made from
+  the master take it.
 - 3D mouse (3Dconnexion SpaceMouse) through spacenavd: pans, zooms and
   orbits the view under the pointer (plans pan and zoom), its left button
   fits everything. Settings → 3D mouse: speed, dead zone, pan and zoom
