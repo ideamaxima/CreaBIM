@@ -89,6 +89,25 @@ pub fn from_items(items: Vec<TitleItem>) -> Result<SheetTemplate, String> {
 
 // ---- DXF ---------------------------------------------------------------------
 
+/// The unit a DXF file's header names (`$INSUNITS`), in words; none when
+/// it names none or one CreaBIM reads as millimetres.
+pub fn dxf_declared_unit(text: &str) -> Option<&'static str> {
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    let at = lines
+        .windows(2)
+        .position(|w| w[0] == "9" && w[1] == "$INSUNITS")?;
+    let code: i64 = lines.get(at + 3)?.parse().ok()?;
+    Some(match code {
+        0 => "no unit",
+        1 => "inches",
+        2 => "feet",
+        4 => "millimetres",
+        5 => "centimetres",
+        6 => "metres",
+        _ => "an unusual unit (read as millimetres)",
+    })
+}
+
 /// Millimetres per drawing unit for a DXF `$INSUNITS` code.
 fn dxf_unit(code: i64) -> f64 {
     match code {
@@ -1764,6 +1783,17 @@ mod tests {
         assert!(
             points.iter().any(|p| p.y > 0.5),
             "it rises toward its middle"
+        );
+    }
+
+    #[test]
+    fn a_dxf_says_which_unit_it_is_in() {
+        assert_eq!(dxf_declared_unit(DXF), Some("millimetres"));
+        let inches = DXF.replace("$INSUNITS\n70\n4", "$INSUNITS\n70\n1");
+        assert_eq!(dxf_declared_unit(&inches), Some("inches"));
+        assert_eq!(
+            dxf_declared_unit("0\nSECTION\n2\nENTITIES\n0\nENDSEC\n"),
+            None
         );
     }
 }
