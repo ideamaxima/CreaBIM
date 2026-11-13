@@ -14,12 +14,17 @@ Issue and pull request numbers refer to the upstream repository.
   view leaves it out when any of them is switched off there. Make, rename,
   organise in folders, select, isolate, duplicate, merge and delete them in
   Manage → Sets; put the selection in them from the Sets button of the
-  element action bar; switch them on and off from the view's Visibility
-  menu (Sets ▸). Views, sheets and view templates keep what they switch off.
+  element action bar, choosing the folder of a new one; switch them on and
+  off from the view's Visibility menu (Sets ▸) or its panel in Properties,
+  a whole folder at once. Views, sheets and view templates keep what they
+  switch off; the 3D view, for the session. Files with sets don't open in
+  CreaBIM 1.1.1.
 - The window opens at 70% of the screen the first time, then where and how
   large it was left.
 
 ### Fixed
+- Hiding something in a view (a set, a category, Hide in view) takes it out
+  of the selection: its grips and dimensions no longer stay over nothing.
 - The view's Visibility panel lists the elements hidden in it even when the
   project has no grid systems (the list was kept inside the Grid systems
   section).
