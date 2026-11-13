@@ -1139,6 +1139,7 @@ impl CreaBimApp {
                             });
                         }
                     });
+                    }
                 }
                 let any_sets = self
                     .doc
@@ -1205,7 +1206,6 @@ impl CreaBimApp {
                             }
                         }); }
                     }
-                }
                 ui.add_space(3.0);
                 if crate::props::row(ui, "", |ui| {
                     ui.add_enabled(!h.is_empty(), egui::Button::new("Show everything"))
