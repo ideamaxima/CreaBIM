@@ -218,6 +218,12 @@ fn scale_of(m: &Affine) -> f64 {
 /// entities, in mm. Blocks (INSERTs) are exploded into what they hold,
 /// and dimensions into the lines and text AutoCAD draws them with.
 pub fn dxf_items(text: &str) -> Result<Vec<TitleItem>, String> {
+    dxf_items_in(text, None)
+}
+
+/// [`dxf_items`], its drawing unit `unit` mm when given, whatever the
+/// file's header says (files often carry a wrong one).
+pub fn dxf_items_in(text: &str, unit: Option<f64>) -> Result<Vec<TitleItem>, String> {
     let lines: Vec<&str> = text.lines().map(str::trim).collect();
     if lines.len() < 2 {
         return Err("that is not a DXF file".into());
@@ -236,6 +242,9 @@ pub fn dxf_items(text: &str) -> Result<Vec<TitleItem>, String> {
         if w[0] == (9, "$INSUNITS") {
             k = dxf_unit(w[1].1.parse().unwrap_or(4));
         }
+    }
+    if let Some(u) = unit {
+        k = u;
     }
     let entities = dxf_section(&pairs, "ENTITIES").ok_or("the DXF file has no ENTITIES section")?;
     // each block's base point and entities, by name

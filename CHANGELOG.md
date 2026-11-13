@@ -17,6 +17,8 @@ Issue and pull request numbers refer to the upstream repository.
   aside); the Sets window says so in red as you type.
 
 ### Added
+- Catalogue: a Units choice for DXF drawings (from the file, mm, cm or m),
+  for files that name the wrong unit.
 - Objects from DXF drawings: in the Catalogue, type a height and *Import DXF
   as plan symbol…*. The drawing (blocks exploded, text and hatches left
   out) is what plans show, its point 0,0 is where the object is placed
