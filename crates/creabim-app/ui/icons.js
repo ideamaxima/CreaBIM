@@ -267,5 +267,6 @@ window.ICONS = {
 "mod-taper": "<path d=\"M5 21h14L15 3H9z\" />",
 "mod-twist": "<path d=\"M6 21h12M8 3h8\" /><path d=\"M6 21 16 3M18 21 8 3\" />",
 "mod-smooth": "<circle cx=\"12\" cy=\"12\" r=\"8\" /><path d=\"M5 9c4 3 10 3 14 0\" />",
-"mod-solidify": "<path d=\"M3 9l9-5 9 5-9 5z\" /><path d=\"M3 9v5l9 5 9-5V9\" />"
+"mod-solidify": "<path d=\"M3 9l9-5 9 5-9 5z\" /><path d=\"M3 9v5l9 5 9-5V9\" />",
+"sets": "<circle cx=\"9\" cy=\"9\" r=\"6\" /><circle cx=\"15\" cy=\"9\" r=\"6\" /><circle cx=\"12\" cy=\"15\" r=\"6\" />"
 };

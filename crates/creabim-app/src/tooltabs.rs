@@ -200,7 +200,7 @@ pub fn entries(tab: usize) -> Vec<Entry> {
             act(
                 "sets",
                 "Sets",
-                "layers",
+                "sets",
                 "Your own sets of elements, of any category: make, rename and delete them, and switch them off view by view",
             ),
             act(

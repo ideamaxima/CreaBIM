@@ -1799,12 +1799,12 @@ fn sets_sub(model: &creabim_core::Model, h: &ViewHidden, p: &str) -> Option<Item
     ];
     level(model, h, p, None, &mut items);
     items.push(Item::Separator);
-    items.push(Item::new("sets", "Manage sets…").icon("layers"));
+    items.push(Item::new("sets", "Manage sets…").icon("sets"));
     Some(Item::Sub {
         label: "Sets".into(),
         enabled: true,
         items,
-        icon: "layers",
+        icon: "sets",
     })
 }
 

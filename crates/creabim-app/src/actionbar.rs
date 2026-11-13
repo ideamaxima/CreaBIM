@@ -369,7 +369,7 @@ impl CreaBimApp {
                 });
                 // the user's sets, left of More
                 ui.add_space(SPLIT);
-                let sets = Act::new("bar.sets", "Sets", "layers")
+                let sets = Act::new("bar.sets", "Sets", "sets")
                     .hint("Put it in your sets or take it out, or make a new set from it");
                 let r = icon_response(ui, &sets, None, text);
                 egui::Popup::menu(&r)
