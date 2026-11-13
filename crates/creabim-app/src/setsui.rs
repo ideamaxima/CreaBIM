@@ -24,6 +24,8 @@ pub(super) struct SetsUi {
     closed: HashSet<ElementId>,
     /// The folder the Sets menu makes new sets in; none: the top.
     menu_folder: Option<ElementId>,
+    /// The Sets menu's folder list is open.
+    menu_pick: bool,
 }
 
 /// What a click asks for, done once the window or menu is drawn.
@@ -230,18 +232,44 @@ impl CreaBimApp {
             Some(f) => sets::path(model, f),
             None => "Top (no folder)".into(),
         };
+        // a list that opens inside this menu: a dropdown would be a second
+        // popup, and a click in it would close this one
         ui.horizontal(|ui| {
             ui.label("In");
-            egui::ComboBox::from_id_salt("sets-menu-folder")
-                .selected_text(shown)
-                .width(180.0)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.sets.menu_folder, None, "Top (no folder)");
-                    for (f, p) in &folders {
-                        ui.selectable_value(&mut self.sets.menu_folder, Some(*f), p);
-                    }
-                });
+            let open = self.sets.menu_pick;
+            let r = icon_button(
+                ui,
+                if open {
+                    "chevron-down"
+                } else {
+                    "chevron-right"
+                },
+                "Pick the folder",
+            );
+            let l = ui.add(
+                egui::Label::new(egui::RichText::new(shown).strong()).sense(egui::Sense::click()),
+            );
+            if r.clicked() || l.clicked() {
+                self.sets.menu_pick = !open;
+            }
         });
+        if self.sets.menu_pick {
+            ui.indent("sets-menu-folders", |ui| {
+                let mut pick = |ui: &mut egui::Ui, f: Option<ElementId>, label: &str| {
+                    if ui
+                        .selectable_label(self.sets.menu_folder == f, label)
+                        .clicked()
+                    {
+                        self.sets.menu_folder = f;
+                        self.sets.menu_pick = false;
+                    }
+                };
+                pick(ui, None, "Top (no folder)");
+                for (f, p) in &folders {
+                    pick(ui, Some(*f), p);
+                }
+            });
+        }
         ui.horizontal(|ui| {
             let r = ui.add(
                 egui::TextEdit::singleline(&mut self.sets.new_name)
