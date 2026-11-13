@@ -20,6 +20,9 @@ Issue and pull request numbers refer to the upstream repository.
   large it was left.
 
 ### Fixed
+- Switching an area back to Floor plans (or Sections, Elevations…) from its
+  header opens the view of that group you had open last, not the first in
+  the browser: coming back from 3D no longer lands on another plan.
 - The view's Duplicate button and Shift+D duplicate a view at once, as copy
   and paste does, instead of failing with "That can't be duplicated."
   ([#35](https://github.com/chopinregis/CreaBIM/issues/35),
