@@ -299,7 +299,16 @@ impl Settings {
     }
 }
 
+/// Where settings and the recent files live. Tests get a folder of their
+/// own, so a test that opens a file never lands in the user's Open recent.
 pub fn settings_dir() -> Option<std::path::PathBuf> {
+    if cfg!(test) {
+        return Some(
+            std::env::temp_dir()
+                .join("creabim-test-settings")
+                .join("CreaBIM"),
+        );
+    }
     let base = std::env::var_os("APPDATA")
         .or_else(|| std::env::var_os("XDG_CONFIG_HOME"))
         .map(std::path::PathBuf::from)
@@ -368,6 +377,12 @@ pub fn pick_save(current: &str, title: &str, ext: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tests_keep_away_from_the_users_settings() {
+        let dir = settings_dir().unwrap();
+        assert!(dir.starts_with(std::env::temp_dir()), "{dir:?}");
+    }
 
     #[test]
     fn settings_from_before_the_layout_options_still_read() {
