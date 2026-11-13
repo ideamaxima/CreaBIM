@@ -263,8 +263,8 @@ impl CreaBimApp {
         let (own, common) = self.element_actions();
         // what doesn't fit goes in More, the common ones first
         let room = ui.available_width();
-        // More and Delete, and the gaps between the groups
-        let fixed = 2.0 * BUTTON + 3.0 * GAP + 2.0 * SPLIT;
+        // Sets, More and Delete, and the gaps between the groups
+        let fixed = 3.0 * BUTTON + 4.0 * GAP + 3.0 * SPLIT;
         // one button's room kept spare, so Delete and More always show at
         // the right however the panel is sized (MU23: an extrusion's
         // actions pushed Delete out of sight)
@@ -288,6 +288,7 @@ impl CreaBimApp {
         let text = ui.visuals().text_color();
         let danger = egui::Color32::from_rgb(0xd0, 0x45, 0x3a);
         let mut picked: Option<String> = None;
+        let mut set_asks = vec![];
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = GAP;
             for a in &shown_own {
@@ -366,8 +367,19 @@ impl CreaBimApp {
                         }
                     }
                 });
+                // the user's sets, left of More
+                ui.add_space(SPLIT);
+                let sets = Act::new("bar.sets", "Sets", "layers")
+                    .hint("Put it in your sets or take it out, or make a new set from it");
+                let r = icon_response(ui, &sets, None, text);
+                egui::Popup::menu(&r)
+                    .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                    .show(|ui| set_asks = self.sets_menu(ui));
             });
         });
+        for a in set_asks {
+            self.run_set_ask(a);
+        }
         if let Some(id) = picked {
             let ctx = ui.ctx().clone();
             self.run_bar_action(&ctx, &id);

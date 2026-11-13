@@ -20,8 +20,11 @@ pub(super) struct SetsUi {
 }
 
 /// What a click in the manager asks for, done once the window is drawn.
-enum Ask {
+pub(super) enum Ask {
     New(String),
+    /// A new set holding the selection.
+    NewFromSelection(String),
+    Manage,
     Rename(ElementId, String),
     Assign(ElementId, bool),
     Show(ElementId, bool),
@@ -62,7 +65,6 @@ impl CreaBimApp {
             Some(gridvis::VisTarget::View(id)) => model.get(id).map(|e| e.name.clone()),
             _ => None,
         };
-        let picked = self.selection.len();
         crate::props::flow(ui, |ui| {
             let r = ui.add_sized(
                 [220.0, 20.0],
@@ -110,10 +112,10 @@ impl CreaBimApp {
             .show(ui, |ui| {
                 egui::Grid::new("sets")
                     .striped(true)
-                    .num_columns(5)
+                    .num_columns(4)
                     .spacing([10.0, 6.0])
                     .show(ui, |ui| {
-                        for h in ["Shown", "Name", "Elements", "Selection", ""] {
+                        for h in ["Shown", "Name", "Elements", ""] {
                             ui.label(egui::RichText::new(h).strong());
                         }
                         ui.end_row();
@@ -147,22 +149,6 @@ impl CreaBimApp {
                                 *draft = name.to_string();
                             }
                             ui.label(sets::uses(model, id).0.to_string());
-                            ui.horizontal(|ui| {
-                                if ui
-                                    .add_enabled(picked > 0, egui::Button::new("Add").small())
-                                    .on_hover_text("Put the selected elements in this set")
-                                    .clicked()
-                                {
-                                    asks.push(Ask::Assign(id, true));
-                                }
-                                if ui
-                                    .add_enabled(picked > 0, egui::Button::new("Remove").small())
-                                    .on_hover_text("Take the selected elements out of this set")
-                                    .clicked()
-                                {
-                                    asks.push(Ask::Assign(id, false));
-                                }
-                            });
                             if self.sets.delete == Some(id) {
                                 let (n, v) = sets::uses(model, id);
                                 ui.horizontal(|ui| {
@@ -187,7 +173,56 @@ impl CreaBimApp {
             });
     }
 
-    fn run_set_ask(&mut self, ask: Ask) {
+    /// The Sets menu of the element action bar: which sets the selection
+    /// is in (a click puts it in or takes it out), a new set from it, and
+    /// the manager.
+    pub(super) fn sets_menu(&mut self, ui: &mut egui::Ui) -> Vec<Ask> {
+        let mut asks = vec![];
+        let model = self.doc.model();
+        let ids = self.selection.all();
+        let list = sets::sets(model);
+        ui.set_min_width(220.0);
+        for (id, name) in &list {
+            let n = ids
+                .iter()
+                .filter(|e| model.get(**e).is_some_and(|e| e.sets.contains(id)))
+                .count();
+            let all = n == ids.len() && n > 0;
+            let mut on = all;
+            let r = ui.add(egui::Checkbox::new(&mut on, *name).indeterminate(n > 0 && !all));
+            if r.clicked() {
+                asks.push(Ask::Assign(*id, !all));
+            }
+        }
+        if !list.is_empty() {
+            ui.separator();
+        }
+        ui.label("New set from selection");
+        ui.horizontal(|ui| {
+            let r = ui.add(
+                egui::TextEdit::singleline(&mut self.sets.new_name)
+                    .hint_text("Name")
+                    .desired_width(150.0),
+            );
+            let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            let name = self.sets.new_name.trim().to_string();
+            if (ui
+                .add_enabled(!name.is_empty(), egui::Button::new("Make"))
+                .clicked()
+                || enter)
+                && !name.is_empty()
+            {
+                asks.push(Ask::NewFromSelection(name));
+            }
+        });
+        ui.separator();
+        if ui.button("Manage sets…").clicked() {
+            asks.push(Ask::Manage);
+        }
+        asks
+    }
+
+    pub(super) fn run_set_ask(&mut self, ask: Ask) {
         match ask {
             Ask::New(name) => {
                 let e = sets::new_set(&name);
@@ -197,6 +232,21 @@ impl CreaBimApp {
                 self.sets.new_name.clear();
                 self.report(r, format!("Set {name} made."));
             }
+            Ask::NewFromSelection(name) => {
+                let e = sets::new_set(&name);
+                let id = e.id;
+                let tx = creabim_core::Transaction::new("New set from selection").insert(e);
+                let mut m = self.doc.model().clone();
+                let _ = tx.apply(&mut m);
+                let mut tx = tx;
+                tx.ops
+                    .extend(sets::assign(&m, id, &self.selection.all(), true).ops);
+                let n = tx.ops.len() - 1;
+                let r = self.doc.commit(tx);
+                self.sets.new_name.clear();
+                self.report(r, format!("Set {name} made with {n} elements."));
+            }
+            Ask::Manage => self.sets.open = true,
             Ask::Rename(id, name) => {
                 let tx = sets::rename(self.doc.model(), id, &name);
                 let r = self.doc.commit(tx);
