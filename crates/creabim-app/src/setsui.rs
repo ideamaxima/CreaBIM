@@ -21,7 +21,7 @@ pub(super) struct SetsUi {
     /// A set or folder asked to be deleted, waiting for a yes.
     delete: Option<ElementId>,
     /// Folders closed in the tree.
-    closed: HashSet<ElementId>,
+    pub closed: HashSet<ElementId>,
     /// The folder the Sets menu makes new sets in; none: the top.
     menu_folder: Option<ElementId>,
     /// The Sets menu's folder list is open.
@@ -719,7 +719,7 @@ fn set_row(
 
 /// A small icon button, drawn with the app's own icons (the text font has
 /// no arrows or ellipsis).
-fn icon_button(ui: &mut egui::Ui, icon: &str, hint: &str) -> egui::Response {
+pub(super) fn icon_button(ui: &mut egui::Ui, icon: &str, hint: &str) -> egui::Response {
     let size = egui::vec2(20.0, 20.0);
     let (r, resp) = ui.allocate_exact_size(size, egui::Sense::click());
     let v = ui.visuals();

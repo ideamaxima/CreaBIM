@@ -1117,7 +1117,7 @@ impl CreaBimApp {
                                 swatch(ui, color);
                                 let mut shown = !h.grid_groups.contains(&id);
                                 let w = ui.available_width();
-                                if crate::props::tick(ui, &mut shown, &name, w).changed() {
+                                            if crate::props::tick(ui, &mut shown, &name, w).changed() {
                                     let label = if shown {
                                         "Show grid system"
                                     } else {
@@ -1131,6 +1131,52 @@ impl CreaBimApp {
                             });
                         }
                     });
+                }
+                let any_sets = self
+                    .doc
+                    .model()
+                    .iter()
+                    .any(|e| matches!(e.kind, ElementKind::Set(_)));
+                if any_sets && crate::props::subsection(ui, "vis.sets", "Sets", true) {
+                    let mut ask: Option<(Vec<ElementId>, bool)> = None;
+                    let all: Vec<ElementId> = creabim_core::sets::sets(self.doc.model())
+                        .into_iter()
+                        .map(|(s, _)| s)
+                        .collect();
+                    let off = all.iter().filter(|s| h.sets.contains(s)).count();
+                    let mut on = off == 0;
+                    if ui
+                        .add(
+                            egui::Checkbox::new(&mut on, "All sets")
+                                .indeterminate(off > 0 && off < all.len()),
+                        )
+                        .clicked()
+                    {
+                        ask = Some((all, off == 0));
+                    }
+                    panel_set_rows(
+                        ui,
+                        self.doc.model(),
+                        &h,
+                        &mut self.sets.closed,
+                        None,
+                        0,
+                        &mut ask,
+                    );
+                    if ui.small_button("Manage sets…").clicked() {
+                        extra = Some("sets");
+                    }
+                    if let Some((ids, hide)) = ask {
+                        let label = if hide { "Hide sets" } else { "Show sets" };
+                        change = Some((
+                            label.into(),
+                            Box::new(move |h| {
+                                for s in ids {
+                                    h.set_set(s, hide);
+                                }
+                            }),
+                        ));
+                    }
                 }
                 let hidden: Vec<(ElementId, String)> = h
                     .elements
@@ -1178,6 +1224,7 @@ impl CreaBimApp {
             self.toggle_view_xray(id);
         }
         match extra {
+            Some("sets") => self.sets.open = true,
             Some("guides.toggle") => self.set_guides_hidden(!self.shell.settings.guides_hidden),
             Some("xray") => self.set_xray(!self.shell.settings.xray),
             Some("hidden.colour3d") => {
@@ -1627,6 +1674,77 @@ pub(super) fn shows_in_3d(kind: &ElementKind) -> bool {
             | ElementKind::Project(_)
             | ElementKind::ElementType(_)
     )
+}
+
+/// The Sets of the Visibility panel: folders that open and close (shared
+/// with the Sets manager), each with a tick for all it holds, and the sets
+/// with theirs. A click leaves in `ask` the sets to hide (true) or show.
+fn panel_set_rows(
+    ui: &mut egui::Ui,
+    model: &creabim_core::Model,
+    h: &ViewHidden,
+    closed: &mut HashSet<ElementId>,
+    folder: Option<ElementId>,
+    depth: usize,
+    ask: &mut Option<(Vec<ElementId>, bool)>,
+) {
+    use creabim_core::sets;
+    const INDENT: f32 = 16.0;
+    let (folders, set_ids) = sets::children(model, folder);
+    for f in folders {
+        let Some(e) = model.get(f) else { continue };
+        let open = !closed.contains(&f);
+        let under = sets::sets_under(model, f);
+        ui.horizontal(|ui| {
+            ui.add_space(depth as f32 * INDENT);
+            if super::setsui::icon_button(
+                ui,
+                if open {
+                    "chevron-down"
+                } else {
+                    "chevron-right"
+                },
+                if open {
+                    "Close the folder"
+                } else {
+                    "Open the folder"
+                },
+            )
+            .clicked()
+            {
+                if open {
+                    closed.insert(f);
+                } else {
+                    closed.remove(&f);
+                }
+            }
+            let off = under.iter().filter(|s| h.sets.contains(s)).count();
+            let mut on = !under.is_empty() && off == 0;
+            if ui
+                .add_enabled(
+                    !under.is_empty(),
+                    egui::Checkbox::new(&mut on, e.name.as_str())
+                        .indeterminate(off > 0 && off < under.len()),
+                )
+                .clicked()
+            {
+                *ask = Some((under.clone(), off == 0));
+            }
+        });
+        if open {
+            panel_set_rows(ui, model, h, closed, Some(f), depth + 1, ask);
+        }
+    }
+    for s in set_ids {
+        let Some(e) = model.get(s) else { continue };
+        ui.horizontal(|ui| {
+            ui.add_space(depth as f32 * INDENT + 20.0);
+            let mut on = !h.sets.contains(&s);
+            if ui.checkbox(&mut on, e.name.as_str()).changed() {
+                *ask = Some((vec![s], !on));
+            }
+        });
+    }
 }
 
 /// The "Sets ▸" submenu of a Visibility menu: a switch for all of them,
