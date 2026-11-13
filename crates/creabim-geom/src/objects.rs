@@ -66,6 +66,11 @@ pub fn object_shade(
     if t.category.is_services() || objects::base_z_of(model, o, t) - floor + hi.z > cut_height {
         return vec![];
     }
+    // drawn for plans (a DXF drawing on a plain box): its lines alone, as
+    // a CAD block; the box's footprint is no shape to tint
+    if matches!(t.parts.as_slice(), [p] if p.name == objects::PLAN_BOX) {
+        return vec![];
+    }
     let mut out = Vec::new();
     for (mesh, material) in objects::model_parts(model, e) {
         let rgb = match material.and_then(|m| model.get(m)).map(|m| &m.kind) {
@@ -162,5 +167,47 @@ mod tests {
             .iter()
             .filter(|i| i.id == sofa.id)
             .all(|i| i.color != [0.8, 0.78, 0.74]));
+    }
+
+    #[test]
+    fn an_object_drawn_for_plans_gets_no_tint() {
+        use creabim_core::objects::{ObjectPart, ObjectType, SymbolItem, PLAN_BOX};
+        let mut m = creabim_core::sample::furnished_house();
+        let sofa = m
+            .iter()
+            .find(|e| e.name.starts_with("Sofa") && matches!(e.kind, ElementKind::Object(_)))
+            .unwrap()
+            .clone();
+        let g = creabim_core::PlanGraphics::default();
+        assert!(
+            !object_shade(&m, &sofa, 1.2, &g).is_empty(),
+            "furniture is tinted"
+        );
+        // its type made a DXF drawing on a box
+        let ty = objects::type_of(&m, &sofa).unwrap().clone();
+        let t_id = m
+            .iter()
+            .find(|e| matches!(&e.kind, ElementKind::ElementType(et) if matches!(&et.params, creabim_core::TypeParams::Object(o) if *o == ty)))
+            .unwrap()
+            .clone();
+        let mut after = t_id.clone();
+        if let ElementKind::ElementType(et) = &mut after.kind {
+            if let creabim_core::TypeParams::Object(o) = &mut et.params {
+                *o = ObjectType {
+                    parts: vec![ObjectPart {
+                        name: PLAN_BOX.into(),
+                        mesh: creabim_core::EditMesh::cuboid(glam::DVec3::new(0.5, 0.7, 0.4)),
+                        material: None,
+                    }],
+                    symbol: vec![SymbolItem::Line(DVec2::ZERO, DVec2::X)],
+                    ..o.clone()
+                };
+            }
+        }
+        creabim_core::Transaction::new("plan box")
+            .replace(t_id.clone(), after)
+            .apply(&mut m)
+            .unwrap();
+        assert!(object_shade(&m, &sofa, 1.2, &g).is_empty());
     }
 }

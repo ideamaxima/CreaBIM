@@ -46,6 +46,8 @@ Issue and pull request numbers refer to the upstream repository.
   large it was left.
 
 ### Fixed
+- Objects from DXF drawings show only their lines in plans, without the
+  grey tint of their box.
 - An object imported again into the catalogue (a DXF with the right units,
   say) is placed with its new shape: the project's type of it, and the
   objects already placed, take it too.
