@@ -621,7 +621,13 @@ fn folder_row(
                 .on_hover_text("What it holds moves up a level")
                 .clicked()
             {
-                asks.push(Ask::Delete(id));
+                // an empty folder goes at once; Ctrl+Z brings it back
+                let (fs, ss) = sets::children(t.model, Some(id));
+                asks.push(if fs.is_empty() && ss.is_empty() {
+                    Ask::ConfirmDelete(id)
+                } else {
+                    Ask::Delete(id)
+                });
                 ui.close();
             }
         });
@@ -709,7 +715,12 @@ fn set_row(
                 .on_hover_text("Its elements stay")
                 .clicked()
             {
-                asks.push(Ask::Delete(id));
+                // an empty set goes at once; Ctrl+Z brings it back
+                asks.push(if n == 0 {
+                    Ask::ConfirmDelete(id)
+                } else {
+                    Ask::Delete(id)
+                });
                 ui.close();
             }
         });
