@@ -482,6 +482,28 @@ impl Mount {
     }
 }
 
+/// Stretch an object type by `k` along its own axes, from the point it is
+/// placed by: its parts and its plan symbol alike. A type so resized is no
+/// longer the catalogue's: placing that again brings its own size back.
+pub fn scale(t: &mut ObjectType, k: DVec3) {
+    for p in &mut t.parts {
+        for v in &mut p.mesh.vertices {
+            *v *= k;
+        }
+    }
+    let k2 = k.truncate();
+    for item in &mut t.symbol {
+        match item {
+            SymbolItem::Loop(pts) => pts.iter_mut().for_each(|p| *p *= k2),
+            SymbolItem::Line(a, b) => {
+                *a *= k2;
+                *b *= k2;
+            }
+        }
+    }
+    t.catalogue = None;
+}
+
 /// The name of the one part of an object drawn for plans (a DXF drawing
 /// as its symbol, a plain box for 3D): such objects are pictured from above.
 pub const PLAN_BOX: &str = "Plan symbol box";
@@ -1458,5 +1480,28 @@ mod tests {
             unreachable!()
         };
         assert_eq!(t.size(), c.object.size());
+    }
+
+    #[test]
+    fn resizing_a_type_stretches_its_shape_and_drawing_and_frees_it() {
+        let mut t = crate::catalogue::starter("starter/bathtub").unwrap().object;
+        t.symbol = vec![SymbolItem::Line(
+            DVec2::new(0.1, -0.2),
+            DVec2::new(0.3, -0.4),
+        )];
+        let before = t.size();
+        scale(&mut t, DVec3::new(2.0, 1.0, 0.5));
+        let after = t.size();
+        assert!((after.x - before.x * 2.0).abs() < 1e-9);
+        assert!((after.y - before.y).abs() < 1e-9);
+        assert!((after.z - before.z * 0.5).abs() < 1e-9);
+        assert_eq!(
+            t.symbol,
+            vec![SymbolItem::Line(
+                DVec2::new(0.2, -0.2),
+                DVec2::new(0.6, -0.4)
+            )]
+        );
+        assert!(t.catalogue.is_none());
     }
 }

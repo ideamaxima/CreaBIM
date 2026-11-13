@@ -451,13 +451,28 @@ fn part_material(
 /// An object type's fields. Returns the undo label of what changed, or "".
 pub(super) fn type_fields(ui: &mut egui::Ui, model: &Model, o: &mut ObjectType) -> &'static str {
     let mut label = "";
+    // its size, typed: the shape and its plan drawing stretch from the
+    // point it is placed by
     let s = o.size();
-    ui.label(format!(
-        "{} wide, {} deep, {} high",
-        crate::units::len(s.x),
-        crate::units::len(s.y),
-        crate::units::len(s.z)
-    ));
+    let mut size = s;
+    for (name, v, tip) in [
+        ("Width", &mut size.x, "Across, side to side"),
+        ("Depth", &mut size.y, "From its back to its front"),
+        ("Height", &mut size.z, "From its underside to its top"),
+    ] {
+        crate::props::row(ui, name, |ui| {
+            crate::props::fill(ui, crate::units::drag(v).range(0.001..=100.0)).on_hover_text(tip);
+        });
+    }
+    if size != s {
+        let k = glam::DVec3::new(
+            size.x / s.x.max(1e-9),
+            size.y / s.y.max(1e-9),
+            size.z / s.z.max(1e-9),
+        );
+        objects::scale(o, k);
+        label = "Object size";
+    }
     // one setting a row, as the rest of Properties (MU23)
     crate::props::row(ui, "Category", |ui| {
         ui.spacing_mut().combo_width = ui.available_width();
@@ -1042,9 +1057,13 @@ impl CreaBimApp {
             .to_string();
         let key = free_key(&dir, &stem);
         let name = stem.replace(['_', '-'], " ");
+        let mut declared = None;
         let read = std::fs::read(path)
             .map_err(|e| e.to_string())
             .and_then(|b| {
+                declared = creabim_exchange::titleblock::dxf_declared_unit(
+                    &creabim_exchange::titleblock::dxf_text(&b),
+                );
                 creabim_exchange::catalogue::read_dxf(&b, &name, &key, height, unit)
                     .map_err(|e| e.to_string())
             });
@@ -1052,10 +1071,25 @@ impl CreaBimApp {
             Ok(c) => match save_to(&dir, &c) {
                 Ok(_) => {
                     let s = c.object.size();
+                    let read_as = match (unit, declared) {
+                        (None, Some(d)) => format!(" The file says it is in {d}."),
+                        (None, None) => " The file names no unit: read as millimetres.".into(),
+                        (Some(_), Some(d)) => {
+                            format!(" Read in the unit you chose; the file says {d}.")
+                        }
+                        (Some(_), None) => " Read in the unit you chose.".into(),
+                    };
+                    let across = s.x.max(s.y);
+                    let odd = if across < 0.05 {
+                        " That is very small for an object: if it is wrong, delete it and import it again with another Units, or type its size in Properties once placed."
+                    } else if across > 10.0 {
+                        " That is very large for an object: if it is wrong, delete it and import it again with another Units, or type its size in Properties once placed."
+                    } else {
+                        ""
+                    };
                     self.status = format!(
-                        "Added {} to your catalogue: {} lines in plan, {} × {}, {} tall, as {}. Click it to place it.",
+                        "Added {} to your catalogue: {} × {}, {} tall, as {}.{read_as}{odd}",
                         c.name,
-                        c.object.symbol.len(),
                         crate::units::len(s.x),
                         crate::units::len(s.y),
                         crate::units::len(s.z),

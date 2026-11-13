@@ -17,6 +17,10 @@ Issue and pull request numbers refer to the upstream repository.
   aside); the Sets window says so in red as you type.
 
 ### Added
+- An object's type takes a typed Width, Depth and Height in Properties: its
+  shape and its plan drawing stretch from the point it is placed by.
+- After importing a DXF as an object, the status line says its size and the
+  unit the file names, and warns when the size looks wrong.
 - Catalogue: a Units choice for DXF drawings (from the file, mm, cm or m),
   for files that name the wrong unit.
 - Objects from DXF drawings: in the Catalogue, type a height and *Import DXF
