@@ -5726,6 +5726,17 @@ pub fn draw_item_with(
                         4.0,
                     ));
                 }
+                // the fine pen (furniture and fixtures, small things): the
+                // light grey their closed outlines are drawn in too, so a
+                // drawing of lines and one of polylines look the same
+                Pen::Fine => {
+                    let (w, c) = if selected {
+                        (2.0, highlight)
+                    } else {
+                        (1.0 * o.proj, grey(120))
+                    };
+                    painter.line_segment([a, b], Stroke::new(w, c));
+                }
                 _ => {
                     painter.line_segment([a, b], Stroke::new(1.0, ink));
                 }

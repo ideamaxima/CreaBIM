@@ -52,6 +52,9 @@ Issue and pull request numbers refer to the upstream repository.
   large it was left.
 
 ### Fixed
+- Plans: lines in the fine pen (furniture and fixtures) are drawn in the
+  same light grey as closed outlines, so an object drawn with lines and one
+  drawn with polylines look alike.
 - Temporary dimensions' numbers read in every theme: their label sits on
   the drawing's own ground, its number coloured to stand out from it.
 - Objects from DXF drawings show only their lines in plans, without the
