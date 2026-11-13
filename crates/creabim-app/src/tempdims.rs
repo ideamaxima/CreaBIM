@@ -537,7 +537,7 @@ pub fn padlock(model: &Model, view: ElementId, d: &TempDim) -> Option<(Transacti
 }
 
 /// The blue of temporary dimensions, for the theme.
-fn blue(dark: bool) -> Color32 {
+pub(crate) fn blue(dark: bool) -> Color32 {
     if dark {
         Color32::from_rgb(120, 170, 245)
     } else {
@@ -691,7 +691,11 @@ pub fn interact(
     if dims.is_empty() {
         return None;
     }
-    let pal = crate::theme::Palette::of(ui.ctx());
+    // drawn on the plan's light paper like the rest of the drawing: on
+    // dark paper the pane turns its greys over afterwards and lifts dark
+    // colours (`paper_dark`), so the theme's own dark colours would be
+    // turned over twice (a light label with light text)
+    let pal = crate::theme::Theme::Light.palette();
     let ink = blue(pal.dark);
     let look = crate::handles::PillLook::of(&pal);
     let pointer = ui
@@ -763,7 +767,8 @@ pub fn interact(
             Stroke::new(if on || over_value { 1.6 } else { 1.0 }, ink),
             egui::StrokeKind::Inside,
         );
-        let color = crate::theme::legible(if on { look.number } else { ink }, ground, pal.text);
+        let color =
+            crate::theme::legible(if on { look.number } else { pal.text }, ground, pal.text);
         painter.galley_with_override_text_color(
             spot.value.min + Vec2::new(6.0, 3.0),
             galley,
