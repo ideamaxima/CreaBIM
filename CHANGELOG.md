@@ -38,7 +38,6 @@ Issue and pull request numbers refer to the upstream repository.
 
 ### Fixed
 - A new project or a sample left as it came closes without asking to save.
-- The window no longer creeps down a little at each start (KDE on Wayland).
 - Running the tests no longer puts their sample file in Open recent.
 - Hiding something in a view (a set, a category, Hide in view) takes it out
   of the selection: its grips and dimensions no longer stay over nothing.
