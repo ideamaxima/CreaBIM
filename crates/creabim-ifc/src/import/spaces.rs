@@ -74,6 +74,7 @@ impl Importer<'_> {
             let eid = self.new_id(e);
             self.other_elems.push(Element {
                 mark: None,
+                sets: vec![],
                 source: None,
                 of_type: None,
                 id: eid,
@@ -99,6 +100,7 @@ impl Importer<'_> {
             let eid = self.new_id(e);
             self.other_elems.push(Element {
                 mark: None,
+                sets: vec![],
                 source: None,
                 of_type: None,
                 id: eid,
@@ -138,6 +140,7 @@ impl Importer<'_> {
             let eid = self.new_id(e);
             self.other_elems.push(Element {
                 mark: None,
+                sets: vec![],
                 source: None,
                 of_type: None,
                 id: eid,

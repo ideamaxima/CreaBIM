@@ -460,6 +460,9 @@ pub struct ViewTemplate {
     /// Categories its views leave out, besides their own.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hidden: Vec<Category>,
+    /// The user's sets its views switch off, besides their own.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hidden_sets: Vec<crate::ElementId>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub overrides: Vec<Override>,
     /// Pens of its own, whatever the scale.
@@ -478,6 +481,7 @@ impl ViewTemplate {
             scale: None,
             style: None,
             hidden: vec![],
+            hidden_sets: vec![],
             overrides: vec![],
             weights: None,
             below_fill: None,
@@ -1143,6 +1147,11 @@ pub fn resolved<'a>(model: &Model, v: &'a View) -> Cow<'a, View> {
     for c in &t.hidden {
         if !out.hidden.hides_category(*c) {
             out.hidden.set_category(*c, true);
+        }
+    }
+    for s in &t.hidden_sets {
+        if !out.hidden.sets.contains(s) {
+            out.hidden.set_set(*s, true);
         }
     }
     let mut overrides = t.overrides.clone();

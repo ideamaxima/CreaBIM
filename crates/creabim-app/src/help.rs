@@ -306,6 +306,7 @@ pub fn element_page(kind: &ElementKind) -> &'static str {
             _ => "views",
         },
         ElementKind::Units(_) => "units",
+        ElementKind::Set(_) => "visibility",
         ElementKind::Project(_) => "project-info",
         ElementKind::Reference(_) => "trace-reference",
         ElementKind::PaperMark(_) => "sheets",

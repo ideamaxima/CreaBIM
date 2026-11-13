@@ -561,6 +561,7 @@ impl<'a> Importer<'a> {
             let name = Self::name(e, "Type");
             self.type_elems.push(Element {
                 mark: None,
+                sets: vec![],
                 id: eid,
                 name,
                 kind: ElementKind::ElementType(t),
@@ -627,6 +628,7 @@ impl<'a> Importer<'a> {
         });
         self.wall_elems.push(Element {
             mark: None,
+            sets: vec![],
             source: None,
             of_type: self.type_ref(id),
             id: eid,
@@ -652,6 +654,7 @@ impl<'a> Importer<'a> {
         let name = Self::name(e, f.kind.label());
         self.opening_elems.push(Element {
             mark: None,
+            sets: vec![],
             source: None,
             of_type: self.type_ref(id),
             id: eid,
@@ -690,6 +693,7 @@ impl<'a> Importer<'a> {
                 let eid = self.new_id(o);
                 self.opening_elems.push(Element {
                     mark: None,
+                    sets: vec![],
                     source: None,
                     of_type: None,
                     id: eid,
@@ -873,6 +877,7 @@ impl<'a> Importer<'a> {
             }
             self.level_elems.push(Element {
                 mark: None,
+                sets: vec![],
                 source: None,
                 id: lid,
                 name,
@@ -1451,6 +1456,7 @@ impl<'a> Importer<'a> {
         }
         self.wall_elems.push(Element {
             mark: None,
+            sets: vec![],
             source: None,
             of_type: self.type_ref(id),
             id: eid,
@@ -1658,6 +1664,7 @@ impl<'a> Importer<'a> {
         self.slabs.insert(id, self.wall_elems.len());
         self.wall_elems.push(Element {
             mark: None,
+            sets: vec![],
             source: None,
             of_type: self.type_ref(id),
             id: eid,
@@ -1851,6 +1858,7 @@ impl<'a> Importer<'a> {
         };
         self.opening_elems.push(Element {
             mark: None,
+            sets: vec![],
             source: None,
             of_type: self.type_ref(id),
             id: eid,
@@ -1919,6 +1927,7 @@ impl<'a> Importer<'a> {
         let eid = self.new_id(e);
         self.other_elems.push(Element {
             mark: None,
+            sets: vec![],
             source: None,
             id: eid,
             name: Self::name(e, class),

@@ -34,6 +34,10 @@ pub struct Element {
     /// [`crate::marks`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mark: Option<String>,
+    /// The user's sets it is in (see [`crate::sets`]); a view leaves it out
+    /// when any of them is switched off there.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sets: Vec<ElementId>,
 }
 
 /// An object in another file that an element mirrors.
@@ -58,6 +62,7 @@ impl Element {
             source: None,
             of_type: None,
             mark: None,
+            sets: vec![],
         }
     }
 
@@ -75,7 +80,10 @@ impl Element {
     /// leave any of these missing.
     pub fn references(&self) -> Vec<ElementId> {
         match &self.kind {
-            ElementKind::Level(_) | ElementKind::Grid(_) | ElementKind::GridGroup(_) => vec![],
+            ElementKind::Level(_)
+            | ElementKind::Grid(_)
+            | ElementKind::GridGroup(_)
+            | ElementKind::Set(_) => vec![],
             // a top level and attached roofs are soft: when one goes the wall
             // keeps the height it had
             ElementKind::Wall(w) => vec![w.level],
@@ -170,6 +178,7 @@ impl Element {
             ElementKind::Viewport(_) => "Viewport",
             ElementKind::Material(_) => "IfcMaterial",
             ElementKind::Assembly(_) => "IfcMaterialLayerSet",
+            ElementKind::Set(_) => "Set",
             ElementKind::Dimension(_) => "Dimension",
             ElementKind::Tag(_) => "Tag",
             ElementKind::Note(_) => "Note",
@@ -371,6 +380,7 @@ impl Element {
             ElementKind::StylePack(p) => p.validate(),
             ElementKind::CropBox(c) => c.validate(),
             ElementKind::Assembly(a) => a.validate(),
+            ElementKind::Set(_) => Ok(()),
             ElementKind::ElementType(t) => t.validate(),
             ElementKind::Shaft(s) => s.validate(),
             ElementKind::Object(o) => o.validate(),
@@ -484,6 +494,9 @@ pub enum ElementKind {
     Join(crate::joins::JoinRule),
     /// A detail component drawn in one view: a flashing, a membrane...
     Detail(crate::detail::DetailItem),
+    /// A set the user made (a layer): elements of any category list it in
+    /// their `sets`, and views can switch it off.
+    Set(crate::sets::Set),
 }
 
 impl ElementKind {
@@ -514,6 +527,7 @@ impl ElementKind {
             ElementKind::TextStyle(_) => "TextStyle",
             ElementKind::SheetTemplate(_) => "SheetTemplate",
             ElementKind::GridGroup(_) => "GridGroup",
+            ElementKind::Set(_) => "Set",
             ElementKind::Assembly(_) => "Assembly",
             ElementKind::Units(_) => "Units",
             ElementKind::Project(_) => "Project information",
