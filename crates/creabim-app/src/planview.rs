@@ -1696,6 +1696,7 @@ pub fn show(
             &mut state.status,
             &mut state.hint,
             quiet,
+            style.background,
         ) {
             return r;
         }

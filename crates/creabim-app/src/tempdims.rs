@@ -664,6 +664,7 @@ pub fn interact(
     status: &mut Option<String>,
     hint: &mut Option<&'static str>,
     quiet: bool,
+    canvas: Option<Color32>,
 ) -> Option<Option<String>> {
     let id = match (selection.active, selection.others.is_empty()) {
         (Some(id), true) if !quiet => id,
@@ -749,7 +750,12 @@ pub fn interact(
         let over_value = pointer.is_some_and(|p| spot.value.expand(2.0).contains(p));
         let over_lock =
             pointer.is_some_and(|p| spot.lock.is_some_and(|l| l.expand(2.0).contains(p)));
-        let ground = if on { look.ground } else { pal.raise };
+        // on the drawing's own ground, its number made legible on it
+        let ground = if on {
+            look.ground
+        } else {
+            canvas.unwrap_or(pal.panel)
+        };
         painter.rect(
             spot.value,
             5.0,
@@ -757,7 +763,7 @@ pub fn interact(
             Stroke::new(if on || over_value { 1.6 } else { 1.0 }, ink),
             egui::StrokeKind::Inside,
         );
-        let color = if on { look.number } else { ink };
+        let color = crate::theme::legible(if on { look.number } else { ink }, ground, pal.text);
         painter.galley_with_override_text_color(
             spot.value.min + Vec2::new(6.0, 3.0),
             galley,
@@ -860,6 +866,24 @@ pub fn interact(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_dimensions_number_reads_on_any_ground() {
+        // the dark themes' light blue on a light ground, and the light
+        // themes' blue on a dark one
+        for theme in crate::theme::Theme::ALL {
+            let p = theme.palette();
+            for ground in [
+                Color32::from_rgb(200, 210, 228),
+                Color32::from_rgb(34, 36, 40),
+                p.panel,
+            ] {
+                let c = crate::theme::legible(blue(p.dark), ground, p.text);
+                let r = crate::theme::contrast_ratio(c, ground);
+                assert!(r >= 4.5 || c == p.text, "{theme:?}: {r}");
+            }
+        }
+    }
     use creabim_core::{Document, Grid, Level, Wall};
 
     fn setup() -> (Document, ElementId, [ElementId; 3], ElementId) {
