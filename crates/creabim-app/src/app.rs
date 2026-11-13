@@ -9915,7 +9915,7 @@ impl CreaBimApp {
                     label = crate::detailtool::detail_fields(ui, d);
                 }
                 // a set has only its name
-                ElementKind::Set(_) | ElementKind::SetFolder(_) => {}
+                ElementKind::Set(_) | ElementKind::SetFolder(_) | ElementKind::Combination(_) => {}
                 ElementKind::RoomSeparator(sep) => {
                     ui.label(format!(
                         "{} long. Rooms on either side of it are measured apart.",
@@ -11769,6 +11769,7 @@ pub(crate) fn kind_word(k: &ElementKind) -> &'static str {
         ElementKind::Detail(_) => "detail component",
         ElementKind::Set(_) => "set",
         ElementKind::SetFolder(_) => "set folder",
+        ElementKind::Combination(_) => "combination",
         ElementKind::Ceiling(_) => "ceiling",
         ElementKind::ElementType(_) => "type",
         ElementKind::Shaft(_) => "shaft",

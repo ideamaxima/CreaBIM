@@ -501,6 +501,7 @@ fn build_scene_unjoined(
             | ElementKind::GridGroup(_)
             | ElementKind::Set(_)
             | ElementKind::SetFolder(_)
+            | ElementKind::Combination(_)
             | ElementKind::Room(_)
             | ElementKind::RoomSeparator(_)
             | ElementKind::Join(_)

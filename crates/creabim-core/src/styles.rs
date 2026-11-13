@@ -1151,7 +1151,7 @@ pub fn resolved<'a>(model: &Model, v: &'a View) -> Cow<'a, View> {
     }
     for s in &t.hidden_sets {
         if !out.hidden.sets.contains(s) {
-            out.hidden.set_set(*s, true);
+            out.hidden.sets.push(*s);
         }
     }
     let mut overrides = t.overrides.clone();

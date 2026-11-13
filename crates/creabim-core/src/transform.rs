@@ -504,7 +504,8 @@ pub fn transformed(model: &Model, e: &Element, t: &Xform) -> Option<Element> {
         | ElementKind::ElementType(_)
         | ElementKind::GridGroup(_)
         | ElementKind::Set(_)
-        | ElementKind::SetFolder(_) => return None,
+        | ElementKind::SetFolder(_)
+        | ElementKind::Combination(_) => return None,
     }
     Some(out)
 }
