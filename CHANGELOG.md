@@ -19,6 +19,10 @@ Issue and pull request numbers refer to the upstream repository.
   aside); the Sets window says so in red as you type.
 
 ### Added
+- 3D mouse (3Dconnexion SpaceMouse) through spacenavd: pans, zooms and
+  orbits the view under the pointer (plans pan and zoom), its left button
+  fits everything. Settings → 3D mouse: speed, dead zone, pan and zoom
+  only, a live reading, and each axis's action, direction and speed.
 - An object's type takes a typed Width, Depth and Height in Properties: its
   shape and its plan drawing stretch from the point it is placed by.
 - After importing a DXF as an object, the status line says its size and the
