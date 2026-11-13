@@ -945,6 +945,21 @@ pub fn show(
             }
         }
     }
+    // the 3D mouse pans and zooms the drawing under the pointer, about its
+    // middle; its left button fits the drawing
+    if response.hovered() && style.camera.is_none() {
+        if crate::spacemouse::take_press(0) {
+            (center, scale) = fit(plan, rect);
+        }
+        let m = crate::spacemouse::current();
+        if !m.is_zero() {
+            let dt = ui.input(|i| i.stable_dt).min(0.05);
+            let px = 800.0 * dt / scale;
+            center -= DVec2::new(m.pan[0] as f64, m.pan[1] as f64) * px as f64;
+            scale = (scale * (1.0 + m.zoom * 2.0 * dt)).clamp(2.0, 2000.0);
+            ui.ctx().request_repaint();
+        }
+    }
     // zoom and pan buttons, for a mouse without a wheel button or a
     // trackpad (MU18): zoom in, zoom out, fit, and a hand dragged to pan
     if style.decorations && style.camera.is_none() {
