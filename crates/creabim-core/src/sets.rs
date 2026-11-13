@@ -44,8 +44,25 @@ pub fn combinations(model: &Model) -> Vec<(ElementId, &str)> {
 }
 
 /// A name not used yet: `base`, else `base 2`, `base 3`...
-fn free_name(model: &Model, base: &str) -> String {
-    let taken = |n: &str| model.iter().any(|e| e.name == n);
+/// Another element of the same kind as `like` (set, folder, combination)
+/// already has `name`, capitals aside; `except` is not counted.
+pub fn name_taken(
+    model: &Model,
+    like: &ElementKind,
+    name: &str,
+    except: Option<ElementId>,
+) -> bool {
+    let name = name.trim().to_lowercase();
+    let kind = std::mem::discriminant(like);
+    model.iter().any(|e| {
+        Some(e.id) != except
+            && std::mem::discriminant(&e.kind) == kind
+            && e.name.trim().to_lowercase() == name
+    })
+}
+
+fn free_name(model: &Model, like: &ElementKind, base: &str) -> String {
+    let taken = |n: &str| name_taken(model, like, n, None);
     let mut name = base.to_string();
     let mut n = 2;
     while taken(&name) {
@@ -63,7 +80,11 @@ pub fn new_combination(model: &Model, name: &str, view: ElementId) -> (Transacti
         _ => vec![],
     };
     let c = Element::new(
-        free_name(model, name),
+        free_name(
+            model,
+            &ElementKind::Combination(Combination::default()),
+            name,
+        ),
         ElementKind::Combination(Combination { hidden_sets }),
     );
     let id = c.id;
@@ -120,7 +141,7 @@ pub fn duplicate_combination(
         return None;
     };
     let copy = Element::new(
-        free_name(model, &format!("{} copy", e.name)),
+        free_name(model, &e.kind, &format!("{} copy", e.name)),
         ElementKind::Combination(c.clone()),
     );
     let id = copy.id;
@@ -189,7 +210,11 @@ pub fn combination_views(model: &Model, combination: ElementId) -> Vec<String> {
 pub fn rename_combination(model: &Model, combination: ElementId, name: &str) -> Transaction {
     let tx = Transaction::new("Rename combination");
     match model.get(combination) {
-        Some(e) if matches!(e.kind, ElementKind::Combination(_)) && e.name != name => {
+        Some(e)
+            if matches!(e.kind, ElementKind::Combination(_))
+                && e.name != name
+                && !name_taken(model, &e.kind, name, Some(combination)) =>
+        {
             let mut after = e.clone();
             after.name = name.to_string();
             tx.replace(e.clone(), after)
@@ -246,7 +271,7 @@ pub fn view_from_combination(
     let at = elements.iter().position(|e| e.id == view)?;
     let (mut copies, _) = crate::transform::fresh_copies(model, &elements);
     let copy = &mut copies[at];
-    copy.name = free_name(model, &format!("{} – {}", v.name, c.name));
+    copy.name = free_name(model, &v.kind, &format!("{} – {}", v.name, c.name));
     if let ElementKind::View(cv) = &mut copy.kind {
         cv.hidden.sets = k.hidden_sets.clone();
         cv.hidden.combination = Some(combination);
@@ -388,13 +413,7 @@ pub fn duplicate(model: &Model, set: ElementId) -> Option<(Transaction, ElementI
     let ElementKind::Set(s) = &e.kind else {
         return None;
     };
-    let names: Vec<&str> = model.iter().map(|e| e.name.as_str()).collect();
-    let mut name = format!("{} copy", e.name);
-    let mut n = 2;
-    while names.contains(&name.as_str()) {
-        name = format!("{} copy {n}", e.name);
-        n += 1;
-    }
+    let name = free_name(model, &e.kind, &format!("{} copy", e.name));
     let copy = Element::new(name, ElementKind::Set(s.clone()));
     let id = copy.id;
     let mut tx = Transaction::new("Duplicate set").insert(copy);
@@ -500,7 +519,8 @@ pub fn rename(model: &Model, set: ElementId, name: &str) -> Transaction {
     match model.get(set) {
         Some(e)
             if matches!(e.kind, ElementKind::Set(_) | ElementKind::SetFolder(_))
-                && e.name != name =>
+                && e.name != name
+                && !name_taken(model, &e.kind, name, Some(set)) =>
         {
             let mut after = e.clone();
             after.name = name.to_string();
@@ -819,5 +839,27 @@ mod tests {
         assert!(doc.model().get(c).is_none());
         assert_eq!(view(&doc, copy).combination, None);
         assert!(combinations(doc.model()).is_empty());
+    }
+
+    #[test]
+    fn names_are_one_of_a_kind_capitals_aside() {
+        let mut m = Model::default();
+        let a = new_set("Furniture");
+        let f = new_folder("Furniture", None);
+        let b = new_set("Walls");
+        for e in [&a, &f, &b] {
+            m.insert((*e).clone()).unwrap();
+        }
+        // a folder may share a set's name
+        assert!(name_taken(&m, &a.kind, "furniture ", None));
+        assert!(!name_taken(&m, &a.kind, "Furniture", Some(a.id)));
+        assert!(rename(&m, b.id, "FURNITURE").ops.is_empty());
+        assert!(!rename(&m, b.id, "Doors").ops.is_empty());
+        let (tx, c) = duplicate(&m, a.id).unwrap();
+        tx.apply(&mut m).unwrap();
+        assert_eq!(m.get(c).unwrap().name, "Furniture copy");
+        let (tx, d) = duplicate(&m, a.id).unwrap();
+        tx.apply(&mut m).unwrap();
+        assert_eq!(m.get(d).unwrap().name, "Furniture copy 2");
     }
 }
