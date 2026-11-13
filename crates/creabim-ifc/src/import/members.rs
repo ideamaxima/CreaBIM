@@ -69,6 +69,7 @@ impl Importer<'_> {
         };
         let element = Element {
             mark: None,
+            sets: vec![],
             source: None,
             of_type: self.type_ref(id),
             id: self.new_id(e),

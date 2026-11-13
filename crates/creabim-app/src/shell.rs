@@ -1600,6 +1600,7 @@ impl CreaBimApp {
             "new.project" => self.open_new_project(ctx),
             "new.sheet" => self.new_sheet(),
             "levels" => self.open_levels(),
+            "sets" => self.sets.open = true,
             "project.info" => self.project_open = true,
             "level.add" => self.add_level_above(),
             "browser.sort" => {

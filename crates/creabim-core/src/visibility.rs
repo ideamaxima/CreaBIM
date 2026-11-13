@@ -178,11 +178,17 @@ pub struct ViewHidden {
     /// Grid groups whose lines are left out.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub grid_groups: Vec<ElementId>,
+    /// The user's sets switched off: their elements are left out.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sets: Vec<ElementId>,
 }
 
 impl ViewHidden {
     pub fn is_empty(&self) -> bool {
-        self.categories.is_empty() && self.elements.is_empty() && self.grid_groups.is_empty()
+        self.categories.is_empty()
+            && self.elements.is_empty()
+            && self.grid_groups.is_empty()
+            && self.sets.is_empty()
     }
 
     pub fn hides_category(&self, c: Category) -> bool {
@@ -210,8 +216,15 @@ impl ViewHidden {
         }
     }
 
+    pub fn set_set(&mut self, id: ElementId, hidden: bool) {
+        self.sets.retain(|x| *x != id);
+        if hidden {
+            self.sets.push(id);
+        }
+    }
+
     /// Every element of `model` this leaves out: the ones listed, those in
-    /// a hidden category or grid group, and what hangs on them (a hidden
+    /// a hidden category, grid group or set, and what hangs on them (a hidden
     /// wall's doors and windows, the tags of hidden elements).
     pub fn hidden_set(&self, model: &Model) -> HashSet<ElementId> {
         let mut out = HashSet::new();
@@ -226,7 +239,8 @@ impl ViewHidden {
                 ElementKind::Grid(g) => g.group.is_some_and(|g| self.grid_groups.contains(&g)),
                 _ => false,
             };
-            if listed || category || group {
+            let in_set = e.sets.iter().any(|s| self.sets.contains(s));
+            if listed || category || group || in_set {
                 out.insert(e.id);
             }
         }

@@ -65,6 +65,8 @@ mod profilesui;
 mod reportui;
 #[path = "selectsimilar.rs"]
 mod selectsimilar;
+#[path = "setsui.rs"]
+mod setsui;
 #[path = "shell.rs"]
 pub(crate) mod shell;
 #[path = "stylesui.rs"]
@@ -276,6 +278,7 @@ pub struct CreaBimApp {
     catalogue: objectsui::CatalogueUi,
     /// The Levels manager and the Project units dialog.
     levels: levelsui::LevelsUi,
+    sets: setsui::SetsUi,
     marks: marksui::MarksUi,
     gstyles: stylesui::StylesUi,
     /// The Copy to levels and Move to level windows.
@@ -472,6 +475,7 @@ impl CreaBimApp {
             type_preview: Default::default(),
             catalogue: Default::default(),
             levels: Default::default(),
+            sets: Default::default(),
             settings_open: false,
             project_open: false,
             note_editor: None,
@@ -9902,6 +9906,8 @@ impl CreaBimApp {
                 ElementKind::Detail(d) => {
                     label = crate::detailtool::detail_fields(ui, d);
                 }
+                // a set has only its name
+                ElementKind::Set(_) | ElementKind::SetFolder(_) => {}
                 ElementKind::RoomSeparator(sep) => {
                     ui.label(format!(
                         "{} long. Rooms on either side of it are measured apart.",
@@ -11418,6 +11424,7 @@ impl eframe::App for CreaBimApp {
         self.type_preview_window(&ctx);
         self.catalogue_window(&ctx);
         self.levels_window(&ctx);
+        self.sets_window(&ctx);
         self.level_copy_window(&ctx);
         self.styles_window(&ctx);
         self.templates_window(&ctx);
@@ -11752,6 +11759,8 @@ pub(crate) fn kind_word(k: &ElementKind) -> &'static str {
         ElementKind::RoomSeparator(_) => "room separator",
         ElementKind::Join(_) => "junction rule",
         ElementKind::Detail(_) => "detail component",
+        ElementKind::Set(_) => "set",
+        ElementKind::SetFolder(_) => "set folder",
         ElementKind::Ceiling(_) => "ceiling",
         ElementKind::ElementType(_) => "type",
         ElementKind::Shaft(_) => "shaft",
