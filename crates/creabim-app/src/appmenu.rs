@@ -317,6 +317,7 @@ impl CreaBimApp {
         let mut marks = self.plan.snap.marks;
         let mut paper = self.shell.settings.drawing_paper.clone();
         let mut navigation = self.shell.settings.navigation.clone();
+        let mut sm = self.shell.settings.spacemouse.clone();
         let mut grip_hover = None;
         let mut edit_bar = self.shell.settings.edit_bar.clone();
         let mut axis_lines = self.shell.settings.axis_lines;
@@ -544,6 +545,7 @@ impl CreaBimApp {
                                                 .weak()
                                                 .small(),
                                         );
+                                        spacemouse_settings(ui, &mut sm);
                                         yours(ui);
                                     }
                                     3 => {
@@ -632,6 +634,11 @@ impl CreaBimApp {
         if edit_bar != self.shell.settings.edit_bar {
             crate::modal::set_bar_by_pointer(edit_bar == "pointer");
             self.shell.settings.edit_bar = edit_bar;
+            self.shell.settings.store();
+        }
+        if sm != self.shell.settings.spacemouse {
+            crate::spacemouse::set_config(&sm);
+            self.shell.settings.spacemouse = sm;
             self.shell.settings.store();
         }
         if navigation != self.shell.settings.navigation {
@@ -917,6 +924,97 @@ pub(crate) fn logo_texture(ctx: &egui::Context) -> egui::TextureHandle {
         )
     })
     .clone()
+}
+
+/// The 3D mouse's settings, on the Navigation page.
+fn spacemouse_settings(ui: &mut egui::Ui, sm: &mut crate::spacemouse::Config) {
+    use crate::spacemouse::{Action, AXIS_NAMES};
+    crate::props::section(ui, "3D mouse");
+    ui.checkbox(&mut sm.enabled, "Navigate with a 3D mouse (SpaceMouse)");
+    let on = sm.enabled;
+    ui.add_enabled_ui(on, |ui| {
+        crate::props::row(ui, "Speed", |ui| {
+            ui.add(
+                egui::Slider::new(&mut sm.speed, 10.0..=400.0)
+                    .step_by(10.0)
+                    .suffix(" %"),
+            )
+        });
+        crate::props::row(ui, "Dead zone", |ui| {
+            ui.add(
+                egui::Slider::new(&mut sm.dead_zone, 0.0..=30.0)
+                    .step_by(1.0)
+                    .suffix(" %"),
+            )
+            .on_hover_text("How far the cap must move before the view does. Raise it if the view drifts with the cap left alone.")
+        });
+        ui.checkbox(&mut sm.no_rotation, "Pan and zoom only (no orbit)")
+            .on_hover_text("The 3D view never turns: for drawing in it from above. Plans only pan and zoom anyway.");
+    });
+    let connected = crate::spacemouse::connected();
+    let status = if connected {
+        "Device driver found: spacenavd"
+    } else {
+        "spacenavd not running: no 3D mouse"
+    };
+    ui.label(egui::RichText::new(status).small());
+    ui.label(
+        egui::RichText::new("Live reading: move the cap one way at a time.")
+            .weak()
+            .small(),
+    );
+    // the motion moved most, and how far
+    let (i, v) = crate::spacemouse::raw()
+        .into_iter()
+        .enumerate()
+        .max_by_key(|(_, v)| v.abs())
+        .unwrap_or((0, 0));
+    let live = if v.abs() > 20 {
+        format!("{}: {}", AXIS_NAMES[i], v)
+    } else {
+        "—".to_string()
+    };
+    ui.monospace(live);
+    if connected {
+        // keep the reading live while the page is open
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_millis(100));
+    }
+    ui.add_enabled_ui(on, |ui| {
+        for (k, name) in AXIS_NAMES.iter().enumerate() {
+            let axis = &mut sm.axes[k];
+            crate::props::row(ui, name, |ui| {
+                ui.horizontal(|ui| {
+                    egui::ComboBox::from_id_salt(("settings.sm.axis", k))
+                        .icon(crate::props::combo_icon)
+                        .selected_text(axis.action.label())
+                        .width(90.0)
+                        .show_ui(ui, |ui| {
+                            for a in Action::ALL {
+                                ui.selectable_value(&mut axis.action, a, a.label());
+                            }
+                        });
+                    ui.checkbox(&mut axis.invert, "Reversed");
+                    ui.add(
+                        egui::DragValue::new(&mut axis.speed)
+                            .range(0.0..=400.0)
+                            .speed(1.0)
+                            .suffix(" %"),
+                    );
+                });
+            });
+        }
+        if ui.button("Restore defaults").clicked() {
+            *sm = crate::spacemouse::Config::default();
+        }
+    });
+    ui.label(
+        egui::RichText::new(
+            "The 3D mouse moves the view under the pointer. Its left button fits everything in it.",
+        )
+        .weak()
+        .small(),
+    );
 }
 
 #[cfg(test)]

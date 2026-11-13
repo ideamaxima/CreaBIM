@@ -348,6 +348,8 @@ impl CreaBimApp {
         crate::handles::set_grip_style(settings.grips);
         crate::modal::set_bar_by_pointer(settings.edit_bar == "pointer");
         crate::handles::set_edit_display(settings.edit_edge_width, settings.edit_vertex_size);
+        crate::spacemouse::set_config(&settings.spacemouse);
+        crate::spacemouse::start(&cc.egui_ctx);
         shell::style(&cc.egui_ctx, theme);
         let viewport = cc
             .wgpu_render_state
@@ -963,6 +965,26 @@ impl CreaBimApp {
             Some((lo, hi)) => self.camera.orbit_around((lo + hi) / 2.0, d),
             None => self.camera.orbit(d),
         }
+    }
+
+    /// The 3D mouse moves the 3D view under the pointer; its left button
+    /// frames everything.
+    fn spacemouse_3d(&mut self, ui: &egui::Ui, rect: Rect) {
+        if crate::spacemouse::take_press(0) {
+            self.frame_3d();
+        }
+        let m = crate::spacemouse::current();
+        if m.is_zero() || self.cube.grabbing() {
+            return;
+        }
+        let dt = ui.input(|i| i.stable_dt).min(0.05);
+        // at full deflection: 800 pointer points a second, as a drag
+        let px = 800.0 * dt;
+        self.camera
+            .pan(GVec2::new(m.pan[0], -m.pan[1]) * px, rect.height());
+        self.orbit_3d(Vec2::new(m.orbit[0], -m.orbit[1]) * px * 0.5);
+        self.camera.zoom(m.zoom * 4.0 * dt);
+        ui.ctx().request_repaint();
     }
 
     /// Frame all in one pane only: the drawing (Home over it) or the 3D
@@ -2930,6 +2952,9 @@ impl CreaBimApp {
             if !classic && mid && !shift_now {
                 self.orbit_3d(response.drag_delta());
             }
+        }
+        if response.hovered() {
+            self.spacemouse_3d(ui, rect);
         }
         if response.hovered() {
             // two fingers on a touchpad pan; a wheel and a pinch zoom (MU24)

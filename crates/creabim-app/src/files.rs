@@ -233,6 +233,8 @@ pub struct Settings {
     /// Edit mode's wires and corner dots, in points.
     pub edit_edge_width: f32,
     pub edit_vertex_size: f32,
+    /// The 3D mouse (SpaceMouse), read through spacenavd.
+    pub spacemouse: crate::spacemouse::Config,
 }
 
 impl Default for Settings {
@@ -273,6 +275,7 @@ impl Default for Settings {
             interaction: "orange".into(),
             edit_edge_width: 1.0,
             edit_vertex_size: 4.0,
+            spacemouse: Default::default(),
         }
     }
 }
