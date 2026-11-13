@@ -122,6 +122,14 @@ impl CreaBimApp {
                         f(&mut v.hidden);
                     }
                 });
+                // what the view now leaves out can't stay selected there:
+                // its grips and dimensions would float over nothing
+                if let Some(v) = self.view(id) {
+                    let gone = v.hidden.hidden_set(self.doc.model());
+                    if !gone.is_empty() {
+                        self.selection.retain(|e| !gone.contains(&e));
+                    }
+                }
                 let name = self.doc.model().get(id).map_or("", |e| e.name.as_str());
                 let msg = format!("{label} in {name}.");
                 self.report(r, msg);

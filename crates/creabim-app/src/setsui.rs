@@ -667,7 +667,11 @@ fn set_row(
                 n => format!("{n} elements"),
             }
         } else {
-            format!("{n} elements · off in {}", views.len())
+            let what = match n {
+                1 => "1 element".to_string(),
+                n => format!("{n} elements"),
+            };
+            format!("{what} · off in {}", views.len())
         };
         let r = ui.label(egui::RichText::new(info).weak());
         if !views.is_empty() {
