@@ -511,14 +511,20 @@ fn folder_row(
     let under = sets::sets_under(t.model, id);
     ui.horizontal(|ui| {
         ui.add_space(depth as f32 * INDENT);
-        if ui
-            .small_button(if open { "▾" } else { "▸" })
-            .on_hover_text(if open {
+        if icon_button(
+            ui,
+            if open {
+                "chevron-down"
+            } else {
+                "chevron-right"
+            },
+            if open {
                 "Close the folder"
             } else {
                 "Open the folder"
-            })
-            .clicked()
+            },
+        )
+        .clicked()
         {
             if open {
                 st.closed.insert(id);
@@ -538,8 +544,15 @@ fn folder_row(
             asks.push(Ask::Show(under.clone(), off > 0));
         }
         name_field(ui, st, id, &e.name, asks);
-        ui.label(egui::RichText::new(format!("{} sets", under.len())).weak());
-        ui.menu_button("⋯", |ui| {
+        ui.label(
+            egui::RichText::new(match under.len() {
+                1 => "1 set".to_string(),
+                n => format!("{n} sets"),
+            })
+            .weak(),
+        );
+        let more = icon_button(ui, "ellipsis", "More");
+        egui::Popup::menu(&more).show(|ui| {
             if ui.button("New set here").clicked() {
                 asks.push(Ask::New("New set".into(), false, Some(id)));
                 ui.close();
@@ -590,7 +603,10 @@ fn set_row(
         let n = sets::members(t.model, id).len();
         let views = sets::views_off(t.model, id);
         let info = if views.is_empty() {
-            format!("{n} elements")
+            match n {
+                1 => "1 element".to_string(),
+                n => format!("{n} elements"),
+            }
         } else {
             format!("{n} elements · off in {}", views.len())
         };
@@ -615,7 +631,8 @@ fn set_row(
         {
             asks.push(Ask::Isolate(id));
         }
-        ui.menu_button("⋯", |ui| {
+        let more = icon_button(ui, "ellipsis", "More");
+        egui::Popup::menu(&more).show(|ui| {
             if ui
                 .button("Duplicate")
                 .on_hover_text("A new set with the same elements")
@@ -645,4 +662,18 @@ fn set_row(
         });
         delete_question(ui, st, id, format!("{n} elements stay."), asks);
     });
+}
+
+/// A small icon button, drawn with the app's own icons (the text font has
+/// no arrows or ellipsis).
+fn icon_button(ui: &mut egui::Ui, icon: &str, hint: &str) -> egui::Response {
+    let size = egui::vec2(20.0, 20.0);
+    let (r, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+    let v = ui.visuals();
+    if resp.hovered() {
+        ui.painter()
+            .rect_filled(r, 3.0, v.widgets.hovered.weak_bg_fill);
+    }
+    crate::svgicon::paint(ui.painter(), r.shrink(3.0), icon, v.text_color());
+    resp.on_hover_text(hint)
 }
