@@ -20,6 +20,9 @@ Issue and pull request numbers refer to the upstream repository.
   large it was left.
 
 ### Fixed
+- The view's Visibility panel lists the elements hidden in it even when the
+  project has no grid systems (the list was kept inside the Grid systems
+  section).
 - Switching an area back to Floor plans (or Sections, Elevations…) from its
   header opens the view of that group you had open last, not the first in
   the browser: coming back from 3D no longer lands on another plan.
