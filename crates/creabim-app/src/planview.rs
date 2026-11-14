@@ -1656,6 +1656,10 @@ fn show_view(
     }
     let rect_tool =
         tool == Tool::Rectangle && matches!(kind, PaneKind::Plan { .. } | PaneKind::Section { .. });
+    // a hole is cut only while the Rectangle tool stays in hand
+    if state.tool != Tool::Rectangle {
+        state.rect.hole_into = None;
+    }
     let hover_world = match (state.pending, pointer_world, line_tool) {
         (Some(a), Some(b), _)
             if rect_tool && response.hovered() && state.rect.view == Some(view) =>

@@ -271,6 +271,86 @@ impl CreaBimApp {
     }
 
     /// Switch to the Align tool.
+    /// Whether shape `id`'s area and perimeter are on the drawing (a tag
+    /// on it reads each).
+    pub(super) fn shape_labels_shown(&self, id: ElementId) -> [bool; 2] {
+        use creabim_core::room::RoomField;
+        let mut out = [false; 2];
+        for e in self.doc.model().iter() {
+            if let ElementKind::Tag(t) = &e.kind {
+                if t.host == id {
+                    out[0] |= t.fields.contains(&RoomField::Area);
+                    out[1] |= t.fields.contains(&RoomField::Perimeter);
+                }
+            }
+        }
+        out
+    }
+
+    /// Do what a drawn shape's fields asked: arm the Rectangle tool to cut
+    /// a hole in it, or put its area or perimeter on the drawing (a tag on
+    /// it, below the other when both are) or take it off.
+    pub(super) fn shape_ask(&mut self, id: ElementId, ask: crate::draw::polyline::ShapeAsk) {
+        use crate::draw::polyline::ShapeAsk;
+        use creabim_core::room::RoomField;
+        match ask {
+            ShapeAsk::None => {}
+            ShapeAsk::CutHole => {
+                self.plan.cancel();
+                self.plan.tool = Tool::Rectangle;
+                self.plan.rect.hole_into = Some(id);
+                self.status = "Cut a hole: draw a rectangle on the shape. Inside, it is a hole; across its edge, the shape is bitten. Esc to stop.".into();
+            }
+            ShapeAsk::Label { perimeter, on } => {
+                let field = if perimeter {
+                    RoomField::Perimeter
+                } else {
+                    RoomField::Area
+                };
+                let model = self.doc.model();
+                let Some(ElementKind::DraftPolyline(l)) = model.get(id).map(|e| &e.kind) else {
+                    return;
+                };
+                let view = l.view;
+                let tags: Vec<Element> = model
+                    .iter()
+                    .filter(|e| matches!(&e.kind, ElementKind::Tag(t) if t.host == id))
+                    .cloned()
+                    .collect();
+                let r = if on {
+                    // one line of 3.5 mm on paper below the other
+                    let scale = match model.get(view).map(|e| &e.kind) {
+                        Some(ElementKind::View(v)) => v.scale,
+                        _ => 100.0,
+                    };
+                    let below = -(tags.len() as f64) * 3.5 * scale / 1000.0;
+                    let mut t = creabim_core::Tag::new(view, id, DVec2::new(0.0, below));
+                    t.fields = vec![field];
+                    let name = if perimeter { "Perimeter" } else { "Area" };
+                    let e = Element::new(name, ElementKind::Tag(t));
+                    self.doc
+                        .commit(Transaction::new("Label on the drawing").insert(e))
+                } else {
+                    let ids: Vec<ElementId> = tags
+                        .iter()
+                        .filter(
+                            |e| matches!(&e.kind, ElementKind::Tag(t) if t.fields.contains(&field)),
+                        )
+                        .map(|e| e.id)
+                        .collect();
+                    let tx = Transaction::new("Label off the drawing")
+                        .remove_all_cascade(self.doc.model(), &ids);
+                    self.doc.commit(tx)
+                };
+                self.status = match r {
+                    Ok(_) if on => "On the drawing: drag it where you want it; its text can be written by hand in its Properties.".into(),
+                    Ok(_) => "Off the drawing.".into(),
+                    Err(e) => format!("Couldn't do that: {e}"),
+                };
+            }
+        }
+    }
+
     pub(super) fn use_align_tool(&mut self) {
         self.plan.tool = Tool::Align;
         self.plan.cancel();

@@ -191,18 +191,29 @@ pub fn rings(model: &Model, e: &Element) -> Vec<RingInfo> {
         }
         // a drawn shape: its corners, on its view's paper; a rectangle
         // keeps its own grips, which keep it one
-        ElementKind::DraftPolyline(l) if l.is_rectangle() => vec![],
+        // keeps its own grips, which keep it one; its holes are free
         ElementKind::DraftPolyline(l) => {
             let Some(frame) = creabim_core::DrawingFrame::of(model, l.view) else {
                 return vec![];
             };
-            vec![RingInfo {
-                ring: Ring::Outline,
-                corners: l.points.iter().map(|p| frame.to_model(*p)).collect(),
-                closed: l.closed,
+            let ring = |ring, pts: &[DVec2], closed| RingInfo {
+                ring,
+                corners: pts.iter().map(|p| frame.to_model(*p)).collect(),
+                closed,
                 normal: frame.normal(),
                 reshapes: true,
-            }]
+            };
+            let mut out = vec![];
+            if !l.is_rectangle() {
+                out.push(ring(Ring::Outline, &l.points, l.closed));
+            }
+            out.extend(
+                l.holes
+                    .iter()
+                    .enumerate()
+                    .map(|(k, h)| ring(Ring::Hole(k), h, true)),
+            );
+            out
         }
         ElementKind::Sketch(sk) if sk.circle.is_none() => {
             let lift = DVec3::Z * elevation(model, sk.level);
@@ -344,6 +355,7 @@ pub fn ring_mut(kind: &mut ElementKind, ring: Ring) -> Option<&mut Vec<DVec2>> {
         (ElementKind::Sketch(sk), Ring::Outline) => Some(&mut sk.points),
         (ElementKind::Detail(d), Ring::Outline) => Some(&mut d.points),
         (ElementKind::DraftPolyline(l), Ring::Outline) => Some(&mut l.points),
+        (ElementKind::DraftPolyline(l), Ring::Hole(k)) => l.holes.get_mut(k),
         (ElementKind::Part(p), ring) => match (&mut p.form, ring) {
             (Form::Extrusion { outline, .. }, Ring::Outline) => Some(outline),
             (Form::Extrusion { holes, .. }, Ring::Hole(k)) => holes.get_mut(k),
@@ -736,7 +748,7 @@ fn shape_problem(e: &Element, disc: bool) -> Option<String> {
         }
         ElementKind::Sketch(sk) if sk.circle.is_none() => (sk.points.clone(), sk.closed, vec![]),
         ElementKind::Detail(d) if d.kind.is_area() => (d.points.clone(), true, vec![]),
-        ElementKind::DraftPolyline(l) => (l.points.clone(), l.closed, vec![]),
+        ElementKind::DraftPolyline(l) => (l.points.clone(), l.closed, l.holes.clone()),
         ElementKind::Part(p) => match &p.form {
             Form::Extrusion { outline, holes, .. } => (outline.clone(), true, holes.clone()),
             Form::Sweep {
