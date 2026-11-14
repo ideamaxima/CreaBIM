@@ -203,7 +203,7 @@ impl Tool {
             Tool::SpotLevel => "Click a point on a floor, slab or roof in a section or elevation, or on a slab in a plan (elsewhere in a plan it marks the plan's level), then click where its text goes. Its text pattern is in Properties.",
             Tool::Note => "Click what the note points at, then where its text goes (turn Leader off to just click). Type its text in Properties. Works on sheets too.",
             Tool::Sketch => "Click the corners of a sketch on this level. Click the first corner to close it, Enter or right-click to leave it open, Esc to cancel. L, A and C draw lines, arcs and circles. Then E extrudes it.",
-            Tool::Guide => "Click two points for a guide through them. Or click an edge, then click where its parallel guide goes. Everything snaps to guides.",
+            Tool::Guide => "Click two points for a guide through them. Or click an edge, then click where its parallel guide goes, or type its distance and press Enter. From a point, type a distance for a guide square to the way you point. Everything snaps to guides.",
             Tool::Grid => "Click two points for a grid line. It goes in the active grid system (top bar) and takes its next label. Shift keeps it straight.",
             Tool::Column => "Click to place a column. It runs up to the next level; set its size in the top bar or Properties.",
             Tool::Beam => "Click the beam's start, then its end; keep clicking to chain beams. Its top sits at the top of the storey. Esc or right-click ends.",
@@ -1578,6 +1578,17 @@ pub fn show(
             | Tool::RoomSeparator
     ) && matches!(kind, PaneKind::Plan { .. });
     let mut tracker_enter = false;
+    // the Guide tool takes a typed distance from its edge or point
+    let guide_typing =
+        tool == Tool::Guide && state.pending.is_some() && matches!(kind, PaneKind::Plan { .. });
+    if guide_typing && response.hovered() {
+        if state.tracker.keys(ui.ctx()) == crate::tracker::Keys::Enter {
+            tracker_enter = true;
+        }
+        // one field: a distance, no angle
+        state.tracker.active = 0;
+        state.tracker.fields[1].clear();
+    }
     let hover_world = match (state.pending, pointer_world, line_tool) {
         (Some(a), Some(b), true) if response.hovered() => {
             if state.tracker.keys(ui.ctx()) == crate::tracker::Keys::Enter {
@@ -2515,16 +2526,18 @@ pub fn show(
                 );
             }
             Tool::Guide => {
-                let (through, dir, text) = match state.guide_edge {
-                    Some((e0, e1)) => {
+                let typed = state.tracker.length();
+                let (through, q) = guide_line(a, b, state.guide_edge, typed).unwrap_or((a, b));
+                let dir = (q - through).normalize_or_zero();
+                let shown = match (typed, state.guide_edge) {
+                    (Some(_), _) => format!("Distance {}", state.tracker.fields[0]),
+                    (None, Some((e0, e1))) => {
                         let d = (e1 - e0).normalize_or_zero();
-                        let off = (b - e0).perp_dot(d).abs();
-                        (b, d, crate::units::len(off))
+                        crate::units::len((b - e0).perp_dot(d).abs())
                     }
-                    None => {
-                        let d = (b - a).normalize_or_zero();
-                        let deg = d.y.atan2(d.x).to_degrees().rem_euclid(180.0);
-                        (a, d, format!("{deg:.1}°"))
+                    (None, None) => {
+                        let deg = dir.y.atan2(dir.x).to_degrees().rem_euclid(180.0);
+                        format!("{deg:.1}°")
                     }
                 };
                 let reach = rect.width().max(rect.height()) as f64 / xf.scale as f64;
@@ -2540,7 +2553,7 @@ pub fn show(
                 painter.text(
                     xf.to_screen(b) + Vec2::new(12.0, -12.0),
                     egui::Align2::LEFT_BOTTOM,
-                    text,
+                    shown,
                     egui::FontId::proportional(13.0),
                     accent.color,
                 );
@@ -2700,7 +2713,10 @@ pub fn show(
 
     let mut error = None;
     if let (true, Some(p), PaneKind::Plan { level }) = (tracker_enter, hover_world, kind) {
-        state.tracker.clear();
+        // the Guide tool reads the typed distance itself
+        if tool != Tool::Guide {
+            state.tracker.clear();
+        }
         if let Err(e) = plan_tool(doc, level, tool, p, state, selection) {
             error = Some(e.to_string());
         }
@@ -3098,6 +3114,47 @@ pub fn clip_to_rect(a: Pos2, b: Pos2, r: Rect) -> Option<(Pos2, Pos2)> {
 /// A click with a drawing tool in a plan (or on a level in the 3D view).
 /// The points of a chain of clicks (walls, beams) are kept for alignment
 /// tracking while it goes on.
+/// The guide the Guide tool makes from its first click `a` to the pointer
+/// `p`, as two points on it. From an edge (`edge`) it is parallel to the
+/// edge, through the pointer, or `typed` metres from the edge on the
+/// pointer's side. From a point with a typed distance it is square to the
+/// way the pointer went (across: a plumb guide; up or down: a level one),
+/// that far from the point. From a point without one it runs through the
+/// two points. `None` when the two points are one.
+pub fn guide_line(
+    a: DVec2,
+    p: DVec2,
+    edge: Option<(DVec2, DVec2)>,
+    typed: Option<f64>,
+) -> Option<(DVec2, DVec2)> {
+    match (edge, typed) {
+        (Some((e0, e1)), typed) => {
+            let d = (e1 - e0).try_normalize()?;
+            let through = match typed {
+                Some(t) => {
+                    let n = d.perp();
+                    let side = if (p - e0).dot(n) < 0.0 { -1.0 } else { 1.0 };
+                    e0 + n * side * t
+                }
+                None => p,
+            };
+            Some((through, through + d))
+        }
+        (None, Some(t)) => {
+            let w = p - a;
+            let side = |v: f64| if v < 0.0 { -1.0 } else { 1.0 };
+            Some(if w.x.abs() >= w.y.abs() {
+                let x = a.x + side(w.x) * t;
+                (DVec2::new(x, a.y), DVec2::new(x, a.y + 1.0))
+            } else {
+                let y = a.y + side(w.y) * t;
+                (DVec2::new(a.x, y), DVec2::new(a.x + 1.0, y))
+            })
+        }
+        (None, None) => (a.distance(p) > 0.01).then_some((a, p)),
+    }
+}
+
 pub fn plan_tool(
     doc: &mut Document,
     level: ElementId,
@@ -3429,15 +3486,18 @@ fn plan_click(
         Tool::RoomSeparator => crate::roomtool::separator_click(doc, level, p, state, selection),
         Tool::Guide => match state.pending.take() {
             None => {
+                state.tracker.clear();
                 state.pending = Some(p);
                 Ok(())
             }
             Some(a) => {
-                let (ga, gb) = match state.guide_edge.take() {
-                    Some((e0, e1)) => (p, p + (e1 - e0)),
-                    None if a.distance(p) > 0.01 => (a, p),
-                    None => return Ok(()),
+                let typed = state.tracker.length();
+                let Some((ga, gb)) = guide_line(a, p, state.guide_edge, typed) else {
+                    state.pending = Some(a);
+                    return Ok(());
                 };
+                state.guide_edge = None;
+                state.tracker.clear();
                 let z = doc.model().level(level).map_or(0.0, |l| l.elevation);
                 let e = Element::new(
                     "Guide",
@@ -7918,6 +7978,33 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn a_typed_guide_distance_goes_to_the_pointer_s_side() {
+        let v = DVec2::new;
+        let edge = Some((v(0.0, 0.0), v(4.0, 0.0)));
+        // from an edge: parallel, that far, on the pointer's side
+        let (p, q) = guide_line(v(1.0, 0.0), v(2.0, 3.0), edge, Some(1.2)).unwrap();
+        assert!((p.y - 1.2).abs() < 1e-9 && (q.y - 1.2).abs() < 1e-9);
+        let (p, _) = guide_line(v(1.0, 0.0), v(2.0, -3.0), edge, Some(1.2)).unwrap();
+        assert!((p.y + 1.2).abs() < 1e-9);
+        // nothing typed: through the pointer, as before
+        let (p, q) = guide_line(v(1.0, 0.0), v(2.0, 0.7), edge, None).unwrap();
+        assert!((p.y - 0.7).abs() < 1e-9 && (q.y - 0.7).abs() < 1e-9);
+        // from a point: pointing across gives a plumb guide that far
+        let a = v(1.0, 1.0);
+        let (p, q) = guide_line(a, v(-3.0, 1.5), None, Some(0.5)).unwrap();
+        assert!((p.x - 0.5).abs() < 1e-9 && (q.x - 0.5).abs() < 1e-9);
+        // pointing up gives a level one
+        let (p, q) = guide_line(a, v(1.2, 4.0), None, Some(2.0)).unwrap();
+        assert!((p.y - 3.0).abs() < 1e-9 && (q.y - 3.0).abs() < 1e-9);
+        // two points, nothing typed: through both; one point: none
+        assert_eq!(
+            guide_line(a, v(3.0, 2.0), None, None),
+            Some((a, v(3.0, 2.0)))
+        );
+        assert_eq!(guide_line(a, a, None, None), None);
+    }
 
     /// Drive a plan pane with pointer events, frame by frame.
     fn drive_box(kind_section: bool, decorations: bool, two: bool) -> usize {
