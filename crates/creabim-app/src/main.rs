@@ -18,6 +18,7 @@ mod editmode;
 mod files;
 mod fillpreview;
 mod ghost;
+mod guidetool;
 mod handles;
 mod help;
 mod hoverpick;
