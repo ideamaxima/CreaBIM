@@ -607,11 +607,28 @@ fn across(wall: &Wall, s: f64) -> f64 {
 const TOL: f64 = 1e-3;
 
 /// A wall with what its joins need to know: its core's span across it,
-/// when it is layered.
+/// when it is layered, and how far its location line is from its
+/// centreline (0 for a curved wall: its ends join by the centreline).
 struct Joinable<'a> {
     id: ElementId,
     wall: &'a Wall,
     core: Option<(f64, f64)>,
+    loc: f64,
+}
+
+impl Joinable<'_> {
+    /// The end of the wall's location line at its centreline end `p`.
+    fn loc_end(&self, p: DVec2) -> DVec2 {
+        p + self.wall.direction().perp() * self.loc
+    }
+}
+
+/// Whether the end `p` of `me` and the end `q` of `o` are one joint: the
+/// centrelines meet there, or the location lines do (walls drawn on their
+/// faces and snapped face to face, whose centrelines miss each other
+/// where they turn).
+fn same_end(me: &Joinable, p: DVec2, o: &Joinable, q: DVec2) -> bool {
+    q.distance(p) < TOL || o.loc_end(q).distance(me.loc_end(p)) < TOL
 }
 
 /// Where the centrelines through `p` along `a` and through `q` along `b` cross.
@@ -656,7 +673,7 @@ fn meeting<'a>(
                 continue;
             }
             let reach = w.thickness.max(o.wall.thickness);
-            if q.distance(p) < TOL {
+            if same_end(me, p, o, q) {
                 exact.push((o, d_out));
             } else if ends_meet(p, d_in, q, d_out, reach) {
                 near.push((o, d_out));
@@ -707,6 +724,11 @@ fn joinables(model: &Model) -> Vec<Joinable<'_>> {
                 id: e.id,
                 wall: w,
                 core: assembly::assembly_of(model, e).map(|(_, a)| assembly::wall_core(a, w)),
+                loc: if w.is_arc() {
+                    0.0
+                } else {
+                    crate::walls::location_offset(model, w)
+                },
             }),
             _ => None,
         })
@@ -729,6 +751,7 @@ pub fn plain_joins(walls: &[(ElementId, Wall)]) -> HashMap<ElementId, WallEnds> 
             id: *id,
             wall: w,
             core: None,
+            loc: 0.0,
         })
         .collect();
     joins_among(&walls, &[])
@@ -773,12 +796,14 @@ fn joins_among(walls: &[Joinable], rules: &[JoinRule]) -> HashMap<ElementId, Wal
             id: j.id,
             wall: j.wall,
             core: j.core,
+            loc: j.loc,
         })
         .collect();
     all.extend(owned.iter().map(|(id, w, core)| Joinable {
         id: *id,
         wall: w,
         core: *core,
+        loc: 0.0,
     }));
     // a rule set for an arc holds for its stand-ins
     let mut rules2: Vec<JoinRule> = rules.to_vec();
@@ -1196,6 +1221,11 @@ fn tee(p: DVec2, d_in: DVec2, me: &Joinable, o: &Joinable) -> Option<((f64, f64,
     let n_in = d_in.perp();
     let left = meet(p + n_in * t, d_in, face, d)?;
     let right = meet(p - n_in * t, d_in, face, d)?;
+    // nearly along the host the faces meet far off: a square end instead
+    let limit = 4.0 * t.max(ow.thickness / 2.0) + off;
+    if left.abs() >= limit || right.abs() >= limit {
+        return None;
+    }
     // layered into layered: the core runs on to the other's core
     let core = match (me.core, o.core) {
         (Some(_), Some((c0, c1))) => {
@@ -1314,6 +1344,12 @@ pub fn follow(before: &Model, changed: &mut [Element]) -> Vec<(Element, Element)
                     if on_me {
                         continue;
                     }
+                    // joined by the centrelines, the other end goes as this
+                    // one does; joined by the location lines, it keeps to
+                    // where this one's location line now ends
+                    let q = if oe { o.wall.end } else { o.wall.start };
+                    let by_loc = q.distance(p_old) >= TOL;
+                    let (o_loc, loc_new) = (o.loc, p_new + nw.direction().perp() * me.loc);
                     let delta = p_new - p_old;
                     let e = out
                         .entry(wall)
@@ -1322,7 +1358,9 @@ pub fn follow(before: &Model, changed: &mut [Element]) -> Vec<(Element, Element)
                         order.push(wall);
                     }
                     if let ElementKind::Wall(o) = &mut e.kind {
-                        if oe {
+                        if by_loc {
+                            loc_end_to(o, oe, o_loc, loc_new);
+                        } else if oe {
                             o.end += delta;
                         } else {
                             o.start += delta;
@@ -1441,6 +1479,24 @@ pub fn follow(before: &Model, changed: &mut [Element]) -> Vec<(Element, Element)
         result.insert(0, (b.clone(), a));
     }
     result
+}
+
+/// Move the end (`at_end`) of wall `w`, whose location line is `loc`
+/// from its centreline, so that its location line ends at `target`: the
+/// centreline end sits `loc` across the wall's new direction from it.
+fn loc_end_to(w: &mut Wall, at_end: bool, loc: f64, target: DVec2) {
+    let far = if at_end { w.start } else { w.end };
+    let mut p = if at_end { w.end } else { w.start };
+    // the direction turns as the end moves: a few rounds settle it
+    for _ in 0..4 {
+        let dir = if at_end { p - far } else { far - p }.normalize_or_zero();
+        p = target - dir.perp() * loc;
+    }
+    if at_end {
+        w.end = p;
+    } else {
+        w.start = p;
+    }
 }
 
 /// An end that sat at `p_old`, `off` across `host_old`, slid along its own
@@ -1898,5 +1954,109 @@ mod tests {
         )
         .unwrap()];
         assert!(follow(&m, &mut moved).is_empty());
+    }
+
+    /// Two walls drawn on `location`, the second's location line started
+    /// where the first's ends at a bend of a few degrees (the centrelines
+    /// 12 mm apart there), then its far end dragged nearly into line.
+    fn face_bend(location: crate::LocationLine) -> (Model, Vec<ElementId>) {
+        let (m, ids) = model(&[
+            (DVec2::new(6.9327, -2.6677), DVec2::new(6.4883, 3.3572)),
+            (DVec2::new(6.4899, 3.3447), DVec2::new(5.8743, 8.0494)),
+        ]);
+        let mut doc = crate::Document::from_model(m);
+        for id in &ids {
+            doc.edit(*id, "face", |e| {
+                if let ElementKind::Wall(w) = &mut e.kind {
+                    w.thickness = 0.4;
+                    w.location = location;
+                }
+            })
+            .unwrap();
+        }
+        let m = doc.model().clone();
+        let first = wall(&m, ids[0]);
+        let (_, face) = crate::walls::location_line(&m, &first);
+        let second = wall(&m, ids[1]);
+        let (_, far) = crate::walls::location_line(&m, &second);
+        doc.edit(ids[1], "snap", |e| {
+            if let ElementKind::Wall(w) = &mut e.kind {
+                crate::walls::set_location_line(&m, w, face, far);
+            }
+        })
+        .unwrap();
+        let m = doc.model().clone();
+        doc.edit(ids[1], "drag", |e| {
+            if let ElementKind::Wall(w) = &mut e.kind {
+                crate::walls::set_location_line(&m, w, face, DVec2::new(6.1573, 8.0753));
+            }
+        })
+        .unwrap();
+        (doc.model().clone(), ids)
+    }
+
+    fn longest_run(j: &WallEnds) -> f64 {
+        j.start
+            .iter()
+            .chain(j.end.iter())
+            .fold(0.0, |a, x| a.max(x.abs()))
+    }
+
+    #[test]
+    fn walls_snapped_face_to_face_nearly_in_line_do_not_shoot_out() {
+        let (m, ids) = face_bend(crate::LocationLine::ExteriorFace);
+        // the centrelines miss each other at the bend
+        assert!(wall(&m, ids[0]).end.distance(wall(&m, ids[1]).start) > 0.005);
+        let joins = wall_joins(&m);
+        for id in &ids {
+            assert!(longest_run(&joins[id]) < 0.5, "{:?}", joins[id]);
+        }
+        // the faces meeting make them one corner
+        assert_eq!(corner_partner(&m, ids[1], false), Some(ids[0]));
+    }
+
+    #[test]
+    fn a_wall_ending_nearly_along_another_does_not_shoot_out() {
+        // on their centrelines, the ends a little apart: no corner, and the
+        // end on the other's body stops short of running off along it
+        let (m, ids) = model(&[
+            (DVec2::new(6.9327, -2.6677), DVec2::new(6.4883, 3.3572)),
+            (DVec2::new(6.4899, 3.3447), DVec2::new(6.1573, 8.0753)),
+        ]);
+        let mut doc = crate::Document::from_model(m);
+        for id in &ids {
+            doc.edit(*id, "thick", |e| {
+                if let ElementKind::Wall(w) = &mut e.kind {
+                    w.thickness = 0.4;
+                }
+            })
+            .unwrap();
+        }
+        let m = doc.model().clone();
+        let joins = wall_joins(&m);
+        for id in &ids {
+            assert!(longest_run(&joins[id]) < 2.0, "{:?}", joins[id]);
+        }
+    }
+
+    #[test]
+    fn a_wall_joined_face_to_face_follows_on_its_face() {
+        let (m, ids) = face_bend(crate::LocationLine::ExteriorFace);
+        let mut moved = m.get(ids[0]).unwrap().clone();
+        if let ElementKind::Wall(w) = &mut moved.kind {
+            w.end += DVec2::new(-0.3, 0.2);
+        }
+        let mut changed = vec![moved];
+        let follows = follow(&m, &mut changed);
+        assert_eq!(follows.len(), 1);
+        let ElementKind::Wall(a) = &changed[0].kind else {
+            unreachable!()
+        };
+        let ElementKind::Wall(b) = &follows[0].1.kind else {
+            unreachable!()
+        };
+        let (_, fa) = crate::walls::location_line(&m, a);
+        let (fb, _) = crate::walls::location_line(&m, b);
+        assert!(fa.distance(fb) < 1e-6, "{}", fa.distance(fb));
     }
 }
