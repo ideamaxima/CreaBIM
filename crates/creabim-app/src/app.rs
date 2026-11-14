@@ -4666,21 +4666,31 @@ impl CreaBimApp {
                 true,
             );
         }
+        // a guide on the level takes a typed distance, as in plans
+        let guide_enter = tool == Tool::Guide
+            && from.is_some()
+            && response.hovered()
+            && self.plan.tracker.keys(ui.ctx()) == crate::tracker::Keys::Enter;
+        if tool == Tool::Guide {
+            self.plan.tracker.active = 0;
+            self.plan.tracker.fields[1].clear();
+        }
         if let Some(a) = from {
             match tool {
                 Tool::Guide => {
-                    let (through, dir) = match self.plan.guide_edge {
-                        Some((e0, e1)) => (at, (e1 - e0).extend(0.0)),
-                        None => (a, at - a),
-                    };
-                    draw_guide_3d(painter, project, through, through + dir, stroke);
+                    let typed = self.plan.tracker.length();
+                    let (ga, gb) =
+                        planview::guide_line(a.truncate(), p, self.plan.guide_edge, typed)
+                            .unwrap_or((a.truncate(), p));
+                    draw_guide_3d(painter, project, ga.extend(z), gb.extend(z), stroke);
                     if let Some(sb) = project(at) {
-                        let text = match self.plan.guide_edge {
-                            Some((e0, e1)) => {
+                        let text = match (typed, self.plan.guide_edge) {
+                            (Some(_), _) => format!("Distance {}", self.plan.tracker.fields[0]),
+                            (None, Some((e0, e1))) => {
                                 let d = (e1 - e0).normalize_or_zero();
                                 crate::units::len((p - e0).perp_dot(d).abs())
                             }
-                            None => crate::units::len(a.truncate().distance(p)),
+                            (None, None) => crate::units::len(a.truncate().distance(p)),
                         };
                         painter.text(
                             sb + Vec2::new(10.0, -12.0),
@@ -4775,7 +4785,7 @@ impl CreaBimApp {
             .filter(|(a, b)| a.truncate().distance(b.truncate()) > 1e-3)
             .map(|(a, b)| (a.truncate(), b.truncate()));
         }
-        if response.clicked() {
+        if response.clicked() || guide_enter {
             let mut sel = self.selection.clone();
             let mut state = std::mem::take(&mut self.plan);
             state.pending = self.pending_3d.filter(|(_, l)| *l == level).map(|(p, _)| p);
@@ -4797,8 +4807,8 @@ impl CreaBimApp {
                         .take()
                         .unwrap_or_else(|| format!("Added on {level_name}.")),
                     (Tool::Section | Tool::Elevation, Some(_)) => "Click the second corner.".into(),
-                    (Tool::Guide, Some(_)) if self.plan.guide_edge.is_some() => "Click where the parallel guide goes.".into(),
-                    (Tool::Guide, Some(_)) => "Click a second point the guide runs through.".into(),
+                    (Tool::Guide, Some(_)) if self.plan.guide_edge.is_some() => "Click where the parallel guide goes, or type its distance and press Enter.".into(),
+                    (Tool::Guide, Some(_)) => "Click a second point the guide runs through, or type a distance and press Enter for a guide square to the way you point.".into(),
                     _ => format!("Added on {level_name}."),
                 };
             }
