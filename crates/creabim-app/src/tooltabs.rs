@@ -1,4 +1,4 @@
-//! The tools row's tabs (brief 02, 2.1): Model, Annotate, View and Manage
+//! The tools row's tabs (brief 02, 2.1): Model, Draw, Annotate, View and Manage
 //! each show their own tools and commands, icons only, while Select and
 //! Align stay at the left on every tab. A tool picked by its key shows its
 //! tab. A tool can be on two tabs where it belongs to both: the callout.
@@ -23,11 +23,16 @@ pub enum Entry {
         icon: &'static str,
         hint: &'static str,
     },
+    /// A tool still to come, shown greyed out where it will be.
+    Soon {
+        label: &'static str,
+        icon: &'static str,
+    },
     /// A divider between groups.
     Sep,
 }
 
-pub const TABS: [&str; 4] = ["Model", "Annotate", "View", "Manage"];
+pub const TABS: [&str; 5] = ["Model", "Draw", "Annotate", "View", "Manage"];
 
 /// On every tab, before it.
 pub const ALWAYS: [Tool; 2] = [Tool::Select, Tool::Align];
@@ -41,6 +46,7 @@ pub fn entries(tab: usize) -> Vec<Entry> {
         icon,
         hint,
     };
+    let soon = |label, icon| Entry::Soon { label, icon };
     match tab {
         0 => vec![
             T(Tool::Wall),
@@ -86,7 +92,23 @@ pub fn entries(tab: usize) -> Vec<Entry> {
             T(Tool::Paving),
             T(Tool::Planting),
         ],
+        // 2D drafting: placeholders until each tool is made
         1 => vec![
+            soon("Line", "slash"),
+            soon("Rectangle", "square"),
+            soon("Polyline", "waypoints"),
+            Sep,
+            soon("Circle", "circle"),
+            soon("Arc", "loader-circle"),
+            soon("Ellipse", "ellipse"),
+            soon("Polygon", "hexagon"),
+            Sep,
+            soon("Freehand", "pencil"),
+            soon("Spline", "spline"),
+            Sep,
+            soon("Point", "crosshair"),
+        ],
+        2 => vec![
             T(Tool::Dimension),
             T(Tool::Angle),
             T(Tool::Radius),
@@ -119,7 +141,7 @@ pub fn entries(tab: usize) -> Vec<Entry> {
                 "How doors, windows and other elements are numbered; renumber, and check for marks used twice",
             ),
         ],
-        2 => vec![
+        3 => vec![
             // levels are what plans are cut from, so they sit with the
             // views that come from them (MU20)
             T(Tool::Level),
@@ -260,9 +282,9 @@ mod tests {
             for e in entries(tab) {
                 let (icon, name) = match e {
                     Entry::Tool(t) => (crate::app::shell::tool_icon(t), t.label().to_string()),
-                    Entry::Act { icon, label, .. } | Entry::Menu { icon, label, .. } => {
-                        (icon, label.to_string())
-                    }
+                    Entry::Act { icon, label, .. }
+                    | Entry::Menu { icon, label, .. }
+                    | Entry::Soon { icon, label } => (icon, label.to_string()),
                     Entry::Sep => continue,
                 };
                 if let Some((_, other)) = seen.iter().find(|(i, _)| *i == icon) {
@@ -283,11 +305,14 @@ mod tests {
             );
         }
         assert_eq!(home_of(Tool::Wall), 0);
-        assert_eq!(home_of(Tool::Dimension), 1);
-        assert_eq!(home_of(Tool::Section), 2);
-        assert_eq!(home_of(Tool::Grid), 3);
+        assert_eq!(home_of(Tool::Dimension), 2);
+        assert_eq!(home_of(Tool::Section), 3);
+        assert_eq!(home_of(Tool::Grid), 4);
         // the callout is on both of its tabs
-        assert!(holds(1, Tool::Callout) && holds(2, Tool::Callout));
+        assert!(holds(2, Tool::Callout) && holds(3, Tool::Callout));
+        // Draw comes after Model, Select and Align on it too
+        assert_eq!(TABS[1], "Draw");
+        assert!(holds(1, Tool::Select) && holds(1, Tool::Align));
         // Select is on every one
         assert!((0..TABS.len()).all(|t| holds(t, Tool::Select)));
     }
