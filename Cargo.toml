@@ -43,3 +43,15 @@ lto = "thin"
 codegen-units = 16
 strip = "none"
 panic = "unwind"
+
+# Day-to-day work (fork): libraries optimised once and cached, our own
+# code lightly optimised, incremental and without LTO, so a change builds
+# in seconds. cargo build --profile quick -p creabim-app
+[profile.quick]
+inherits = "dev"
+opt-level = 1
+debug = false
+incremental = true
+
+[profile.quick.package."*"]
+opt-level = 3

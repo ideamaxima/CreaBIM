@@ -69,13 +69,9 @@ pub struct WebUi {
     x11: Option<X11Focus>,
 }
 
-const CSS: &str = include_str!("../ui/app.css");
-const JS: &str = include_str!("../ui/app.js");
-const ICONS: &str = include_str!("../ui/icons.js");
-
 /// icons.js as name -> markup: one `"name": "markup",` per line.
 pub fn icon_markup() -> Vec<(String, String)> {
-    ICONS
+    crate::uifiles::icons()
         .lines()
         .filter(|l| l.starts_with('"'))
         .filter_map(|l| {
@@ -96,9 +92,14 @@ fn page(pane: Pane) -> String {
         ),
         _ => String::new(),
     };
+    let (css, js, icons) = (
+        crate::uifiles::css(),
+        crate::uifiles::js(),
+        crate::uifiles::icons(),
+    );
     format!(
-        "<!doctype html><html data-pane=\"{}\"><head><meta charset=\"utf-8\"><style>{CSS}</style></head>\
-         <body><div id=\"root\"></div><script>{ICONS}</script>{pages}<script>{JS}</script></body></html>",
+        "<!doctype html><html data-pane=\"{}\"><head><meta charset=\"utf-8\"><style>{css}</style></head>\
+         <body><div id=\"root\"></div><script>{icons}</script>{pages}<script>{js}</script></body></html>",
         pane.name()
     )
 }
@@ -427,7 +428,7 @@ mod approved_icons {
 
     /// icons.js as key -> markup: one `"key": "markup",` per line.
     fn icons_js() -> BTreeMap<String, String> {
-        super::ICONS
+        crate::uifiles::ICONS
             .lines()
             .filter(|l| l.starts_with('"'))
             .map(|l| {

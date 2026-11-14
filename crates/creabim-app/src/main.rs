@@ -51,6 +51,7 @@ mod tooltabs;
 mod trace;
 mod tracker;
 mod ui_model;
+mod uifiles;
 mod units;
 mod viewcube;
 mod webui;
