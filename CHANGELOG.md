@@ -66,6 +66,9 @@ Issue and pull request numbers refer to the upstream repository.
   large it was left.
 
 ### Fixed
+- A DXF with blocks in arrays inside arrays no longer hangs the app on
+  opening: reading stops at a million items and the status says so
+  ([PR #56](https://github.com/chopinregis/CreaBIM/pull/56)).
 - The view bar's Grid button turns the grid behind drawings off and on
   again, and a sheet's Picture button opens the picture dialog: both did
   nothing.
