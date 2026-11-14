@@ -190,7 +190,7 @@ pub fn click(
     };
     state.pending = None;
     state.rect.clear();
-    let l = DraftPolyline::new(view, quad.to_vec(), true, &state.line.look);
+    let l = DraftPolyline::rectangle(view, quad, &state.line.look);
     let (w, h) = (quad[0].distance(quad[1]), quad[1].distance(quad[2]));
     let e = Element::new("Rectangle", ElementKind::DraftPolyline(l));
     selection.only(e.id);
@@ -376,6 +376,31 @@ mod tests {
         assert!(!shapes[0].fill.on, "born empty");
         assert!((shapes[0].area().unwrap() - 2.0).abs() < 1e-9);
         assert!(state.pending.is_none() && sel.active.is_some());
+        // it stays a rectangle: four corner grips and four side grips, and
+        // a corner dragged keeps its right angles
+        let id = sel.active.unwrap();
+        let grips = crate::handles::handles_in(doc.model(), id, None, false);
+        assert_eq!(grips.len(), 8);
+        let corner = grips
+            .iter()
+            .find(|g| g.kind == crate::handles::HandleKind::RectCorner(2))
+            .unwrap();
+        let originals = vec![doc.model().get(id).unwrap().clone()];
+        let moved = crate::handles::apply(
+            doc.model(),
+            &originals,
+            &[],
+            corner.kind,
+            corner.at,
+            corner.at + glam::DVec3::new(1.0, 0.0, 0.0),
+            0.0,
+        )
+        .unwrap();
+        let ElementKind::DraftPolyline(r) = &moved[0].kind else {
+            panic!()
+        };
+        assert!(r.is_rectangle());
+        assert!((r.area().unwrap() - 3.0).abs() < 1e-6, "3 wide, 1 tall");
         assert!(doc.undo());
         assert_eq!(doc.model().iter().count(), 1);
     }

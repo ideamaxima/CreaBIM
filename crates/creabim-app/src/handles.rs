@@ -182,6 +182,11 @@ pub enum HandleKind {
     LineEnd {
         end: bool,
     },
+    /// A drawn rectangle's corner: the opposite one stays, it keeps its
+    /// right angles.
+    RectCorner(usize),
+    /// A drawn rectangle's side `i`, pushed square to itself.
+    RectSide(usize),
     /// A repeating detail's unit length, at the end of its first unit.
     DetailSpacing,
     /// A plant's canopy, at the edge of its crown.
@@ -222,6 +227,7 @@ impl HandleKind {
             HandleKind::WallEnd { .. }
                 | HandleKind::GridEnd { .. }
                 | HandleKind::LineEnd { .. }
+                | HandleKind::RectCorner(_)
                 | HandleKind::Member { free: true, .. }
                 | HandleKind::ViewEnd { .. }
                 | HandleKind::CropMove
@@ -304,6 +310,8 @@ impl HandleKind {
             HandleKind::GridEnd { .. } => "Grid end",
             HandleKind::LineEnd { end: false } => "Start",
             HandleKind::LineEnd { end: true } => "End",
+            HandleKind::RectCorner(_) => "Corner",
+            HandleKind::RectSide(_) => "Side: push",
             HandleKind::Face(_) => "Face: push",
             HandleKind::Member { .. } => "Point",
             HandleKind::ViewEnd { .. } => "Line end",
@@ -454,6 +462,7 @@ pub fn pick_allows(k: &HandleKind) -> bool {
                 | K::WallEnd { .. }
                 | K::GridEnd { .. }
                 | K::LineEnd { .. }
+                | K::RectCorner(_)
                 | K::Member { .. }
                 | K::MeshMove
                 | K::Rotate
@@ -1006,6 +1015,7 @@ pub fn handles(model: &Model, id: ElementId, face: Option<usize>) -> Vec<Handle>
             out
         }
         ElementKind::Detail(d) => detail_grips(model, d),
+        ElementKind::DraftPolyline(l) => crate::draw::polyline::rect_grips(model, l),
         ElementKind::DraftLine(l) => {
             let Some(frame) = creabim_core::DrawingFrame::of(model, l.view) else {
                 return vec![];
@@ -1626,6 +1636,12 @@ pub fn apply(
             let dz = round(d.z, step).clamp(-o.sill, o.height - 0.2);
             o.sill += dz;
             o.height -= dz;
+        }
+        (
+            ElementKind::DraftPolyline(l),
+            k @ (HandleKind::RectCorner(_) | HandleKind::RectSide(_)),
+        ) => {
+            crate::draw::polyline::rect_drag(model, l, k, grab, now)?;
         }
         (ElementKind::DraftLine(l), HandleKind::LineEnd { end }) => {
             let frame = creabim_core::DrawingFrame::of(model, l.view).ok_or("no view")?;

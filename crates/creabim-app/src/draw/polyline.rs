@@ -14,8 +14,35 @@ use glam::DVec2;
 pub fn fields(ui: &mut egui::Ui, l: &mut DraftPolyline, patterns: &[String]) -> &'static str {
     use crate::app::stylesui::colour_pick;
     let mut label = "";
-    crate::props::row(ui, "Corners", |ui| ui.label(l.points.len().to_string()));
-    if l.points.len() > 2 {
+    if let Some((mut w, mut h)) = l.size() {
+        // a rectangle: its size, its first corner staying put
+        let mut changed = false;
+        crate::props::row(ui, "Width", |ui| {
+            changed |= ui
+                .add(crate::units::drag(&mut w).range(0.001..=1.0e5))
+                .changed();
+        });
+        crate::props::row(ui, "Height", |ui| {
+            changed |= ui
+                .add(crate::units::drag(&mut h).range(0.001..=1.0e5))
+                .changed();
+        });
+        if changed {
+            l.set_size(w, h);
+            label = "Rectangle size";
+        }
+        if ui
+            .button("Convert to polyline")
+            .on_hover_text("Free its corners: then Tab moves, adds and removes them one by one")
+            .clicked()
+        {
+            l.shape = creabim_core::draw::ShapeKind::Free;
+            label = "Convert to polyline";
+        }
+    } else {
+        crate::props::row(ui, "Corners", |ui| ui.label(l.points.len().to_string()));
+    }
+    if l.points.len() > 2 && !l.is_rectangle() {
         crate::props::row(ui, "Closed", |ui| {
             if ui
                 .checkbox(&mut l.closed, "")
@@ -147,10 +174,8 @@ pub fn fields(ui: &mut egui::Ui, l: &mut DraftPolyline, patterns: &[String]) -> 
         });
     });
     ui.label(
-        egui::RichText::new(
-            "Drawn shapes show in this view only, never in 3D, schedules or IFC. Tab edits their corners.",
-        )
-        .weak(),
+        egui::RichText::new("Drawn shapes show in this view only, never in 3D, schedules or IFC.")
+            .weak(),
     );
     label
 }
@@ -194,5 +219,69 @@ pub fn draw_fill(
     if let Some(first) = first {
         let last = mark();
         crate::planview::keep_colours(painter.ctx(), painter.layer_id(), first, last);
+    }
+}
+
+/// A drawn rectangle's grips: its corners, free on its view's paper, and
+/// its sides' middles, square to them. None for a free polyline (Tab
+/// edits its corners).
+pub fn rect_grips(model: &creabim_core::Model, l: &DraftPolyline) -> Vec<crate::handles::Handle> {
+    use crate::handles::{Constraint, Handle, HandleKind};
+    let Some(frame) = creabim_core::DrawingFrame::of(model, l.view).filter(|_| l.is_rectangle())
+    else {
+        return vec![];
+    };
+    let normal = frame.normal();
+    let mut out: Vec<Handle> = (0..4)
+        .map(|i| {
+            let at = frame.to_model(l.points[i]);
+            Handle {
+                kind: HandleKind::RectCorner(i),
+                at,
+                constraint: Constraint::Plane { point: at, normal },
+                nudge: 0.0,
+            }
+        })
+        .collect();
+    for i in 0..4 {
+        let (a, b) = (l.points[i], l.points[(i + 1) % 4]);
+        let mid = (a + b) / 2.0;
+        let at = frame.to_model(mid);
+        let n = (b - a).normalize_or(DVec2::X).perp();
+        let dir = (frame.to_model(mid + n) - at).normalize_or_zero();
+        out.push(Handle {
+            kind: HandleKind::RectSide(i),
+            at,
+            constraint: Constraint::Line { point: at, dir },
+            nudge: 0.0,
+        });
+    }
+    out
+}
+
+/// A rectangle's grip `k` dragged from `grab` to `now` (model points).
+pub fn rect_drag(
+    model: &creabim_core::Model,
+    l: &mut DraftPolyline,
+    k: crate::handles::HandleKind,
+    grab: glam::DVec3,
+    now: glam::DVec3,
+) -> Result<(), String> {
+    use crate::handles::HandleKind;
+    let frame = creabim_core::DrawingFrame::of(model, l.view).ok_or("no view")?;
+    match k {
+        HandleKind::RectCorner(i) => l.drag_corner(i, frame.to_drawing(now)),
+        HandleKind::RectSide(i) => {
+            let (a, b) = (l.points[i % 4], l.points[(i + 1) % 4]);
+            let n = (b - a).normalize_or(DVec2::X).perp();
+            let d = frame.to_drawing(now) - frame.to_drawing(grab);
+            let out = if (a - l.centre()).dot(n) < 0.0 { -n } else { n };
+            l.push_side(i, d.dot(out));
+        }
+        _ => return Ok(()),
+    }
+    match l.size() {
+        Some((w, h)) if w > 1e-3 && h > 1e-3 => Ok(()),
+        _ => Err("a rectangle needs a width and a height".into()),
     }
 }
