@@ -191,6 +191,15 @@ type Ent<'a> = (&'a str, &'a [Group<'a>]);
 const MAX_NESTING: usize = 16;
 /// The most copies one INSERT's rows and columns make.
 const MAX_ARRAY: i64 = 10_000;
+/// The most items one file makes in all: arrays inside arrays multiply
+/// past the caps above, and would hang the app opening the file. A file
+/// that reaches it is drawn that far (see [`dxf_capped`]).
+pub const MAX_ITEMS: usize = 1_000_000;
+
+/// Did reading stop at [`MAX_ITEMS`], leaving part of the drawing out?
+pub fn dxf_capped(items: &[TitleItem]) -> bool {
+    items.len() >= MAX_ITEMS
+}
 
 /// The entities of the section `name`, if the file has one.
 fn dxf_section<'a>(pairs: &'a [Group<'a>], name: &str) -> Option<Vec<Ent<'a>>> {
@@ -295,6 +304,7 @@ pub fn dxf_items_in(text: &str, unit: Option<f64>) -> Result<Vec<TitleItem>, Str
     }
     let mut out = vec![];
     dxf_draw(&entities, &[k, 0.0, 0.0, k, 0.0, 0.0], 0, &blocks, &mut out);
+    out.truncate(MAX_ITEMS);
     Ok(out)
 }
 
@@ -309,6 +319,10 @@ fn dxf_draw(
     let num = |v: &str| v.trim().parse::<f64>().unwrap_or(0.0);
     let mut poly: Option<(Vec<DVec2>, bool, Affine)> = None;
     for &(name, g) in ents {
+        if out.len() >= MAX_ITEMS {
+            out.truncate(MAX_ITEMS);
+            return;
+        }
         let get = |c: i64| g.iter().find(|p| p.0 == c).map(|p| num(p.1));
         let raw = |x: i64, y: i64| DVec2::new(get(x).unwrap_or(0.0), get(y).unwrap_or(0.0));
         // most entities lie in their own plane; one seen from below
@@ -472,6 +486,9 @@ fn dxf_draw(
                 let (dx, dy) = (get(44).unwrap_or(0.0), get(45).unwrap_or(0.0));
                 for r in 0..rows {
                     for c in 0..cols {
+                        if out.len() >= MAX_ITEMS {
+                            break;
+                        }
                         let step = translate(DVec2::new(c as f64 * dx, r as f64 * dy));
                         let one = compose(&compose(&place, &step), &size);
                         dxf_draw(inner, &compose(&mo, &one), depth + 1, blocks, out);
@@ -1601,6 +1618,26 @@ mod tests {
         assert_eq!(lines.len(), 6);
         assert!(near(lines[0][1], DVec2::new(-10.0, 0.0)), "{:?}", lines[0]);
         assert!(lines.iter().any(|l| near(l[0], DVec2::new(50.0, 60.0))));
+    }
+
+    #[test]
+    fn arrays_inside_arrays_stop_at_the_file_s_item_budget() {
+        // 100 x 100 copies of a block that is itself 100 x 100 copies of a
+        // line: a hundred million lines, each array under its own cap
+        let blocks = format!(
+            "{BLOCK_B}0\nBLOCK\n2\nGRID\n10\n0\n20\n0\n\
+             0\nINSERT\n2\nB\n10\n0\n20\n0\n70\n100\n71\n100\n44\n1\n45\n1\n0\nENDBLK\n"
+        );
+        let text = dxf_with(
+            &blocks,
+            "0\nINSERT\n2\nGRID\n10\n0\n20\n0\n70\n100\n71\n100\n44\n200\n45\n200\n",
+        );
+        let items = dxf_items(&text).unwrap();
+        assert_eq!(items.len(), MAX_ITEMS);
+        assert!(dxf_capped(&items));
+        // a small file is not capped
+        let small = dxf_items(&dxf_with(BLOCK_B, "0\nINSERT\n2\nB\n10\n0\n20\n0\n")).unwrap();
+        assert!(!dxf_capped(&small));
     }
 
     #[test]

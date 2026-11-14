@@ -7763,6 +7763,7 @@ impl CreaBimApp {
             self.status = why.clone();
             return;
         }
+        let r_source_dxf = matches!(source, creabim_core::RefSource::Dxf { .. });
         let mut r = creabim_core::Reference::new(source, vec![v]);
         if let Some(b) = crate::trace::bounds_of(&r.source, &shown) {
             r.in_place(b);
@@ -7784,6 +7785,12 @@ impl CreaBimApp {
             self.selection.only(id);
             self.prop_tab = PropTab::Element;
             self.status = "Reference added. Drag its middle to move it, a corner to scale it, the round grip to turn it; Calibrate sets an exact size. Alt+F2 hides it.".into();
+            if r_source_dxf && crate::trace::DXF_CAPPED.load(std::sync::atomic::Ordering::Relaxed) {
+                self.status = format!(
+                    "Reference added, but only in part: the file makes more than {} items (blocks in arrays inside arrays), so reading stopped there.",
+                    creabim_exchange::titleblock::MAX_ITEMS
+                );
+            }
         }
     }
 
