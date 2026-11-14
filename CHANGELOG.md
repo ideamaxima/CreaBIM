@@ -9,6 +9,7 @@ Issue and pull request numbers refer to the upstream repository.
 ## [Unreleased]
 
 ### Changed
+- The Sets window opens as tall as the Catalogue, where it always opened.
 - The Catalogue window opens tall, just below the view's header and well
   above the bottom, its buttons always in sight below the list.
 - Imported objects tell what they are from names with figures ("WC01")
