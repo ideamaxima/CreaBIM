@@ -250,7 +250,7 @@ pub fn tool_page(t: Tool) -> &'static str {
         Tool::Stair | Tool::Railing => "stairs-railings",
         Tool::Footing => "footings",
         Tool::Level => "levels",
-        Tool::Align => "align",
+        Tool::Align | Tool::Measure => "align",
         Tool::Object => "furniture",
         Tool::Extrusion | Tool::Sweep => "parts",
         Tool::Void => "parts#voids",

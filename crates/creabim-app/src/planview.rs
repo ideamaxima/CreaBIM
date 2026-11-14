@@ -86,10 +86,12 @@ pub enum Tool {
     Detail,
     /// A line drawn in one view (Draw tab).
     Line,
+    /// Two clicks measure a distance; nothing is drawn or saved.
+    Measure,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 42] = [
+    pub const ALL: [Tool; 43] = [
         Tool::Select,
         Tool::Wall,
         Tool::Door,
@@ -132,6 +134,7 @@ impl Tool {
         Tool::Grid,
         Tool::Level,
         Tool::Align,
+        Tool::Measure,
     ];
 
     /// Dimensions, tags and notes: tools that annotate a view.
@@ -183,6 +186,7 @@ impl Tool {
             Tool::Callout => "Callout",
             Tool::Detail => "Detail component",
             Tool::Line => "Line",
+            Tool::Measure => "Measure",
         }
     }
 
@@ -227,6 +231,7 @@ impl Tool {
             Tool::Room => "Click inside walls for a room that follows them (3, Fill room), or draw its outline (1 Polygon, 2 Rectangle, 4 From sketch) where no walls close it off. Its name, number and finishes are in Properties.",
             Tool::RoomSeparator => "Click two points for a line that splits a room in two where there is no wall, such as between a kitchen and a dining room.",
             Tool::Callout => "On a plan or section, click two corners of a box round what to detail: it becomes a detail view at the scale in the top bar, numbered in a bubble on this view.",
+            Tool::Measure => "Click two points to measure between them: distance, ΔX, ΔY and angle by the pointer, then in the status bar. Shift keeps it square, Alt drops the snaps. Nothing is drawn or saved; the next click starts a new measure, Esc or a right-click drops it.",
             Tool::Line => "Click two points for a line in this view. Type its length (Tab: angle) and press Enter; Shift keeps it square, Alt drops the snaps. Its pen, pattern, colour and end marks are in the top bar for the next line, in Properties for a selected one. Lines show in this view only.",
             Tool::Detail => "Pick what to draw in the top bar, then click its points; Enter, a double-click or a right-click finishes (the first point again closes a region). Esc keeps what is drawn. Detail components show in this view only.",
             Tool::Ceiling => "Click inside a room for a ceiling over it that follows its walls (3, Fill room), or draw its outline (1 Polygon, 2 Rectangle, 4 From sketch). Set its height and thickness in the top bar or Properties.",
@@ -538,6 +543,8 @@ pub struct PlanState {
     pub details: crate::detailtool::DetailSettings,
     /// The Line tool's view and the look of the next line.
     pub line: crate::draw::line::LineTool,
+    /// The Measure tool's first point.
+    pub measure: crate::draw::measure::MeasureTool,
     /// The set each tool draws into (Features 21).
     pub tool_sets: crate::toolsets::ToolSets,
     /// A view made in a pane that the app should open: a new detail view.
@@ -698,6 +705,7 @@ impl Default for PlanState {
             types: HashMap::new(),
             details: Default::default(),
             line: Default::default(),
+            measure: Default::default(),
             tool_sets: Default::default(),
             want_view: None,
             step_prompt: None,
@@ -747,6 +755,7 @@ impl PlanState {
         self.rested.1.clear();
         self.align.clear();
         self.details.path.clear();
+        self.measure.clear();
         self.temp = Default::default();
     }
 
@@ -763,6 +772,7 @@ impl PlanState {
             || !self.members.path.is_empty()
             || self.align.has_input()
             || !self.details.path.is_empty()
+            || self.measure.first_3d.is_some()
     }
 
     /// Drop every snap reference, and the guides they make.
@@ -911,6 +921,7 @@ fn show_view(
         (PaneKind::Axonometric, Tool::Tag) => Tool::Tag,
         (PaneKind::Axonometric, Tool::Note) => Tool::Note,
         (PaneKind::Axonometric, Tool::Align) => Tool::Align,
+        (PaneKind::Axonometric, Tool::Measure) => Tool::Measure,
         (PaneKind::Axonometric | PaneKind::Schedule, _) => Tool::Select,
         (_, t) => t,
     };
@@ -1174,7 +1185,7 @@ fn show_view(
     if !response.dragged() {
         // (the Align tool takes faces in a 3D view, so Tab reaches them)
         let reading = (matches!(tool, Tool::Select | Tool::Tag)
-            || (tool == Tool::Align && kind == PaneKind::Axonometric))
+            || (matches!(tool, Tool::Align | Tool::Measure) && kind == PaneKind::Axonometric))
             && state.modal.is_none()
             && state.boxsel.is_none()
             // in Edit mode Tab is Layers', in a drag the typed length's
@@ -1389,13 +1400,25 @@ fn show_view(
     let snap_cfg = state.snap.live(alt);
     // the Align tool in a 3D view works on the model's faces
     let align_under = match (kind, tool) {
-        (PaneKind::Axonometric, Tool::Align) => {
+        (PaneKind::Axonometric, Tool::Align | Tool::Measure) => {
             let fs = axo_frame_snaps(state, doc, view);
             let under = match (&fs, response.hover_pos()) {
                 (Some(fs), Some(p)) => axo_align_under(state, doc, view, fs, &xf, p, &snap_cfg),
                 _ => Default::default(),
             };
-            if let Some(fs) = &fs {
+            if let (Some(fs), Tool::Measure) = (&fs, tool) {
+                let project = |m: DVec3| Some(xf.to_screen(fs.0.project(m).truncate()));
+                measure_3d_preview(
+                    ui,
+                    &painter,
+                    &project,
+                    state,
+                    view,
+                    &under,
+                    shift,
+                    response.hover_pos(),
+                );
+            } else if let Some(fs) = &fs {
                 let project = |m: DVec3| Some(xf.to_screen(fs.0.project(m).truncate()));
                 crate::align3d::draw(&painter, &project, doc.model(), &state.align, &under);
             }
@@ -2340,6 +2363,18 @@ fn show_view(
     if tool == Tool::Line && matches!(kind, PaneKind::Plan { .. } | PaneKind::Section { .. }) {
         crate::draw::line::preview(&painter, &xf, state, view, hover_world, mm);
     }
+    if tool == Tool::Measure && matches!(kind, PaneKind::Plan { .. } | PaneKind::Section { .. }) {
+        crate::draw::measure::preview_2d(
+            ui,
+            &painter,
+            &xf,
+            state,
+            view,
+            kind,
+            hover_world,
+            response.hover_pos(),
+        );
+    }
     // a callout's box or a detail component being drawn, and Enter to
     // finish the component
     if matches!(tool, Tool::Callout | Tool::Detail) {
@@ -2983,6 +3018,16 @@ fn show_view(
             (PaneKind::Plan { .. } | PaneKind::Section { .. }, Tool::Line) => {
                 crate::draw::line::click(doc, view, p, state, selection)
             }
+            (PaneKind::Plan { .. } | PaneKind::Section { .. }, Tool::Measure) => {
+                crate::draw::measure::click(state, view, kind, p);
+                Ok(())
+            }
+            (PaneKind::Axonometric, Tool::Measure) => {
+                let under = align_under.unwrap_or_default();
+                let p = measure_point(state, view, &under, shift);
+                crate::draw::measure::click_3d(state, view, p);
+                Ok(())
+            }
             (_, t) if crate::annotate::is_tool(t) => match &view_def {
                 Some(v) => crate::annotate::click(
                     doc,
@@ -3042,6 +3087,9 @@ fn show_view(
                 (PaneKind::Section { .. }, t) => t.section_hint(),
                 (PaneKind::Axonometric, Tool::Tag) => Tool::Tag.hint(),
                 (PaneKind::Axonometric, Tool::Note) => Tool::Note.hint(),
+                (PaneKind::Axonometric, Tool::Measure) => {
+                    "Measure in 3D: click two points on the model (corners, edges, faces). Shift keeps it along an axis, Alt drops the snaps, Tab picks what is behind. Nothing is drawn or saved."
+                }
                 (PaneKind::Axonometric, Tool::Align) => {
                     "Align in 3D: click a face, edge, corner, centre line or grid line for the reference (empty space takes the plane of the level nearest the ground), then a face to align, stretch or extend to it. Tab picks what is behind. Esc lets go."
                 }
@@ -3318,7 +3366,7 @@ fn plan_click(
     selection: &mut Selection,
 ) -> Result<(), creabim_core::ModelError> {
     match tool {
-        Tool::Select | Tool::Align => Ok(()),
+        Tool::Select | Tool::Align | Tool::Measure => Ok(()),
         Tool::Level => {
             state.status = Some(
                 "Level lines are drawn in a section or elevation. Here, add, rename and move levels in the Levels window.".into(),
@@ -3626,6 +3674,57 @@ fn axo_frame_snaps(
 /// What the Align tool takes under pointer `p` of 3D view `view`: the
 /// face of what the pre-selection reads there (Tab may have moved it), an
 /// object snap, and the lowest level for empty space.
+/// The model point the Measure tool takes in 3D: the snap under the
+/// pointer, else the face's point; with Shift held to an axis from the
+/// first point.
+fn measure_point(
+    state: &PlanState,
+    view: ElementId,
+    under: &crate::align3d::Under,
+    shift: bool,
+) -> Option<DVec3> {
+    let p = under
+        .snap
+        .map(|s| s.p)
+        .or_else(|| under.face.as_ref().map(|f| f.face.point))?;
+    match state
+        .measure
+        .first_3d
+        .filter(|_| state.measure.view == Some(view))
+    {
+        Some(a) if shift => Some(crate::draw::measure::square_3d(a, p)),
+        _ => Some(p),
+    }
+}
+
+/// The 3D measure in progress, drawn with `project`.
+#[allow(clippy::too_many_arguments)]
+fn measure_3d_preview(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    project: &dyn Fn(DVec3) -> Option<Pos2>,
+    state: &PlanState,
+    view: ElementId,
+    under: &crate::align3d::Under,
+    shift: bool,
+    at: Option<Pos2>,
+) {
+    let here = measure_point(state, view, under, shift);
+    if let Some(p) = here.and_then(project) {
+        painter.circle_stroke(p, 5.0, Stroke::new(1.5, crate::theme::interaction()));
+    }
+    let Some(a) = state
+        .measure
+        .first_3d
+        .filter(|_| state.measure.view == Some(view))
+    else {
+        return;
+    };
+    let Some(sa) = project(a) else { return };
+    let b = here.and_then(|b| project(b).map(|sb| (sb, crate::draw::measure::Reading::of(a, b))));
+    crate::draw::measure::preview(ui, painter, sa, b, PaneKind::Axonometric, at);
+}
+
 fn axo_align_under(
     state: &mut PlanState,
     doc: &Document,

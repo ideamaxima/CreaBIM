@@ -82,6 +82,7 @@ window.ICONS = {
 "circle-dot": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <circle cx=\"12\" cy=\"12\" r=\"1\" />",
 "move-3d": "<path d=\"M5 3v16h16\" /> <path d=\"m5 19 6-6\" /> <path d=\"m2 6 3-3 3 3\" /> <path d=\"m18 16 3 3-3 3\" />",
 "spline": "<circle cx=\"19\" cy=\"5\" r=\"2\" /> <circle cx=\"5\" cy=\"19\" r=\"2\" /> <path d=\"M5 17A12 12 0 0 1 17 5\" />",
+"ruler-dimension-line": "<path d=\"M12 15v-3.014\" /> <path d=\"M16 15v-3.014\" /> <path d=\"M20 6H4\" /> <path d=\"M20 8V4\" /> <path d=\"M4 8V4\" /> <path d=\"M8 15v-3.014\" /> <rect x=\"3\" y=\"12\" width=\"18\" height=\"7\" rx=\"1\" />",
 "waypoints": "<path d=\"m10.586 5.414-5.172 5.172\" /> <path d=\"m18.586 13.414-5.172 5.172\" /> <path d=\"M6 12h12\" /> <circle cx=\"12\" cy=\"20\" r=\"2\" /> <circle cx=\"12\" cy=\"4\" r=\"2\" /> <circle cx=\"20\" cy=\"12\" r=\"2\" /> <circle cx=\"4\" cy=\"12\" r=\"2\" />",
 "loader-circle": "<path d=\"M21 12a9 9 0 1 1-6.219-8.56\" />",
 "hexagon": "<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\" />",

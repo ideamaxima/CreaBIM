@@ -18,6 +18,8 @@ names+="""circle-help book-open keyboard rocket x arrow-right info""".split()
 names+="""chevrons-down-up chevrons-up-down""".split()
 # the Draw tab's 2D tools
 names+="""waypoints loader-circle hexagon""".split()
+# the Measure tool
+names+="""ruler-dimension-line""".split()
 # snap markers, drawn like the markers in the views (not from Lucide)
 CUSTOM={
  # the Draw tab's Point: Lucide's asterisk, drawn larger (corner to corner)
