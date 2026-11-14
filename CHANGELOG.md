@@ -19,6 +19,8 @@ Issue and pull request numbers refer to the upstream repository.
   aside); the Sets window says so in red as you type.
 
 ### Added
+- Masters: pick several items (Shift+click, box, circle or lasso, Ctrl+A)
+  and move, nudge, delete, duplicate or rotate them all at once.
 - Masters take any paper size: Width and Height typed in Properties, or
   A1's height with a length in A4 modules (210 mm each). Sheets made from
   the master take it.
