@@ -12,7 +12,7 @@
 
 ## The tool tabs and tool row
 
-Four tabs hold the tools: **Model** (walls, doors, slabs, roofs, structure, objects, masses, rooms, site), **Annotate** (dimensions, tags, notes, details), **View** (levels, sections, elevations, crop boxes, references, sheets, schedules, graphic styles) and **Manage** (levels, grids, guides, project information, types, profiles, materials and the project's checks). **Select** and **Align** are always there. Hover a tool for its name, its key and how to use it. *Create* lists the same tools by name, and `Shift+A` finds any of them by typing.
+Four tabs hold the tools: **Model** (walls, doors, slabs, roofs, structure, objects, masses, rooms, site), **Annotate** (dimensions, tags, notes, details), **View** (levels, sections, elevations, crop boxes, references, sheets and schedules) and **Manage** (levels, grids, guides, project information, types, profiles, materials, style packs and the project's checks). **Select** and **Align** are always there. Hover a tool for its name, its key and how to use it. *Create* lists the same tools by name, and `Shift+A` finds any of them by typing.
 
 ## The tool options strip
 

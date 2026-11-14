@@ -170,12 +170,6 @@ pub fn entries(tab: usize) -> Vec<Entry> {
             },
             Sep,
             act(
-                "graphicstyles",
-                "Graphic styles",
-                "align-left",
-                "Style packs: pens by scale, object styles, hatch patterns and view templates",
-            ),
-            act(
                 "templates",
                 "Sheet templates",
                 "sheet-template",

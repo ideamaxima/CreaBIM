@@ -19,6 +19,8 @@ pub(super) struct TypesUi {
     pub open: bool,
     /// The type being edited.
     current: Option<ElementId>,
+    scroll_category: Option<TypeCategory>,
+    empty_category: bool,
 }
 
 /// What a click asks for, done once the window or panel is drawn.
@@ -492,6 +494,8 @@ fn plural(n: usize, word: &str) -> String {
 impl CreaBimApp {
     pub(super) fn open_types(&mut self, current: Option<ElementId>) {
         self.types.open = true;
+        self.types.empty_category = false;
+        self.types.scroll_category = None;
         if current.is_some() {
             self.types.current = current;
         }
@@ -559,7 +563,8 @@ impl CreaBimApp {
         if all.is_empty() {
             items.push(Item::new("types.starters", "Add starter types").icon("plus"));
         }
-        items.push(Item::new("types.browser", "Types…").icon("element-types"));
+        items
+            .push(Item::new(format!("types.tool_browser:{cat:?}"), "Types…").icon("element-types"));
         items
     }
 
@@ -616,6 +621,21 @@ impl CreaBimApp {
     pub(super) fn types_action(&mut self, head: &str, arg: &str) -> bool {
         match head {
             "types.browser" => self.open_types(None),
+            "types.tool_browser" => {
+                if let Some(cat) = TypeCategory::ALL
+                    .into_iter()
+                    .find(|c| format!("{c:?}") == arg)
+                {
+                    let first = types::types(self.doc.model())
+                        .iter()
+                        .find(|(_, _, t)| t.category() == cat && !t.is_curtain())
+                        .map(|(id, _, _)| *id);
+                    self.types.open = true;
+                    self.types.current = first;
+                    self.types.empty_category = first.is_none();
+                    self.types.scroll_category = Some(cat);
+                }
+            }
             "types.starters" => self.run_types(TypeAsk::Starters),
             "type.tool" => {
                 let (cat, id) = arg.split_once(':').unwrap_or((arg, "none"));
@@ -932,6 +952,7 @@ impl CreaBimApp {
         let mut open = true;
         let mut asks = vec![];
         let area = self.mat.area.unwrap_or_else(|| ctx.content_rect());
+        let scroll_category = self.types.scroll_category.take();
         crate::app::shell::window("Types")
             .open(&mut open)
             .default_pos(area.min + Vec2::new(36.0, 36.0))
@@ -939,21 +960,32 @@ impl CreaBimApp {
             .default_size([720.0, (area.height() - 40.0).clamp(360.0, 620.0)])
             .min_width(600.0)
             .collapsible(false)
-            .show(ctx, |ui| self.types_body(ui, &mut asks));
+            .show(ctx, |ui| self.types_body(ui, &mut asks, scroll_category));
         self.types.open = open;
         for ask in asks {
             self.run_types(ask);
         }
     }
 
-    fn types_body(&self, ui: &mut egui::Ui, asks: &mut Vec<TypeAsk>) {
+    fn types_body(
+        &self,
+        ui: &mut egui::Ui,
+        asks: &mut Vec<TypeAsk>,
+        scroll_category: Option<TypeCategory>,
+    ) {
         let model = self.doc.model();
         let all = types::types(model);
         let current = self
             .types
             .current
             .filter(|c| all.iter().any(|(id, _, _)| id == c))
-            .or_else(|| all.first().map(|t| t.0));
+            .or_else(|| {
+                if self.types.empty_category {
+                    None
+                } else {
+                    all.first().map(|t| t.0)
+                }
+            });
         let height = ui.available_height().max(320.0);
         ui.horizontal_top(|ui| {
             ui.vertical(|ui| {
@@ -964,12 +996,15 @@ impl CreaBimApp {
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         for (heading, cat, curtain) in GROUPS {
-                            ui.label(
+                            let heading_response = ui.label(
                                 egui::RichText::new(heading.to_uppercase())
                                     .size(10.5)
                                     .strong()
                                     .color(ui.visuals().weak_text_color()),
                             );
+                            if scroll_category == Some(cat) && !curtain && current.is_none() {
+                                heading_response.scroll_to_me(Some(egui::Align::Min));
+                            }
                             for (id, name, t) in all
                                 .iter()
                                 .filter(|(_, _, t)| t.category() == cat && t.is_curtain() == curtain)
@@ -980,11 +1015,13 @@ impl CreaBimApp {
                                 } else {
                                     name.to_string()
                                 };
-                                if ui
+                                let response = ui
                                     .selectable_label(current == Some(*id), text)
-                                    .on_hover_text(t.summary(model))
-                                    .clicked()
-                                {
+                                    .on_hover_text(t.summary(model));
+                                if scroll_category == Some(cat) && current == Some(*id) {
+                                    response.scroll_to_me(Some(egui::Align::Center));
+                                }
+                                if response.clicked() {
                                     asks.push(TypeAsk::Pick(*id));
                                 }
                             }

@@ -9,6 +9,8 @@ Issue and pull request numbers refer to the upstream repository.
 ## [Unreleased]
 
 ### Changed
+- Opening Types from a drawing tool's type list shows the first type in that category.
+- Graphic styles is available in Manage instead of appearing in both Manage and View.
 - The Sets window opens as tall as the Catalogue, where it always opened.
 - The Catalogue window opens tall, just below the view's header and well
   above the bottom, its buttons always in sight below the list.
