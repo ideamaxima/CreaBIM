@@ -26,7 +26,10 @@ They work in plans, sections and elevations.
 **Guides** are construction lines kept in the model: dashed, snapped to, never printed or exported.
 
 - Pick the **Guide** tool and click two points for a guide through them.
-- Or click an edge, then click where its parallel guide goes.
+- Or click an edge, then click where its parallel guide goes. Or **type its distance** from the edge (`1200`, `1.2 m`) and press `Enter`: it goes that far on the side the pointer is.
+- From a point, type a distance and press `Enter` for a guide square to the way you point: point across for a plumb guide, up or down for a level one. Without a number, the second click makes a guide through the two points.
+- `Backspace` takes a figure back, `Esc` clears what you typed.
+- Right-click a guide: *Delete* takes it away, *Delete all guides on this level* takes all of that level's in one step.
 
 In 3D, guides go on the [workplane](sketches#the-workplane); in a section, on the section plane.
 

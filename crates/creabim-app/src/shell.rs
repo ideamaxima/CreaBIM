@@ -677,6 +677,7 @@ impl CreaBimApp {
                     items.extend(self.wall_menu_items());
                     items.extend(self.join_menu_items());
                     items.extend(self.level_menu_items());
+                    items.extend(self.guide_menu_items());
                     for group in [
                         &[
                             Command::Move,
@@ -1817,6 +1818,7 @@ impl CreaBimApp {
             "plan3d" => self.plan_in_3d = !self.plan_in_3d,
             "divide" => self.open_divide(),
             "split" => self.start_split(),
+            "guides.delete_level" => self.delete_level_guides(),
             "frame" => self.frame_pane(false),
             "nav.fitsel" => self.frame_selection(),
             "sched.csv" => self.schedule_export = Some("csv".into()),
