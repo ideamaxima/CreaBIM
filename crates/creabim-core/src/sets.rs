@@ -512,6 +512,25 @@ pub fn assign(model: &Model, set: ElementId, ids: &[ElementId], add: bool) -> Tr
     tx
 }
 
+/// Can `e` be put in a set as it is drawn? What shows in views does
+/// (anything with a category, section marks included, and detail
+/// components); sets, plan views, types, materials and rules do not.
+pub fn takes_set(e: &Element) -> bool {
+    matches!(e.kind, ElementKind::Detail(_))
+        || crate::visibility::Category::of(e, &Default::default()).is_some()
+}
+
+/// Put what `tx` inserts in `set`, where it can be and has no sets yet.
+pub fn stamp(tx: &mut Transaction, set: ElementId) {
+    for op in &mut tx.ops {
+        if let crate::Op::Insert(e) = op {
+            if e.sets.is_empty() && takes_set(e) {
+                e.sets.push(set);
+            }
+        }
+    }
+}
+
 /// Give a set or folder a new name; what is in it and the views stay as
 /// they are.
 pub fn rename(model: &Model, set: ElementId, name: &str) -> Transaction {
@@ -861,5 +880,50 @@ mod tests {
         let (tx, d) = duplicate(&m, a.id).unwrap();
         tx.apply(&mut m).unwrap();
         assert_eq!(m.get(d).unwrap().name, "Furniture copy 2");
+    }
+
+    #[test]
+    fn what_a_drawing_tool_makes_goes_in_its_set_in_the_same_undo_step() {
+        use crate::{Document, Wall};
+        use glam::DVec2;
+        let m = sample_house();
+        let level = m
+            .iter()
+            .find(|e| matches!(e.kind, ElementKind::Level(_)))
+            .unwrap()
+            .id;
+        let mut doc = Document::from_model(m);
+        let s = new_set("New walls");
+        let set = s.id;
+        doc.commit(Transaction::new("set").insert(s)).unwrap();
+        doc.stamp_sets(Some(set));
+        let w = Element::new(
+            "Wall",
+            ElementKind::Wall(Wall::new(level, DVec2::ZERO, DVec2::X * 3.0, 0.2, 3.0)),
+        );
+        let wid = w.id;
+        // a copy keeps the sets it came with
+        let mut copy = w.clone();
+        copy.id = ElementId::new();
+        copy.sets = vec![ElementId::new()];
+        let cid = copy.id;
+        let kept = copy.sets.clone();
+        doc.commit(Transaction::new("Add wall").insert(w).insert(copy))
+            .unwrap();
+        doc.stamp_sets(None);
+        assert_eq!(doc.model().get(wid).unwrap().sets, vec![set]);
+        assert_eq!(doc.model().get(cid).unwrap().sets, kept);
+        // a set is never put in a set
+        assert!(!takes_set(&new_set("x")));
+        assert!(doc.undo());
+        assert!(doc.model().get(wid).is_none());
+        // with the tool done, what is made is left alone
+        let w2 = Element::new(
+            "Wall",
+            ElementKind::Wall(Wall::new(level, DVec2::ZERO, DVec2::Y, 0.2, 3.0)),
+        );
+        let w2id = w2.id;
+        doc.commit(Transaction::new("Add wall").insert(w2)).unwrap();
+        assert!(doc.model().get(w2id).unwrap().sets.is_empty());
     }
 }

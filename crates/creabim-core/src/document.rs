@@ -38,6 +38,9 @@ pub struct Document {
     model: Model,
     undo: Vec<Step>,
     redo: Vec<Step>,
+    /// The set new elements go in while a drawing tool is at work (see
+    /// [`Document::stamp_sets`]); none leaves them as they are made.
+    stamp: Option<ElementId>,
 }
 
 impl Document {
@@ -73,6 +76,7 @@ impl Document {
             model,
             undo: undo.into_iter().map(Step::new).collect(),
             redo: redo.into_iter().map(Step::new).collect(),
+            stamp: None,
         })
     }
 
@@ -96,11 +100,22 @@ impl Document {
         &self.redo
     }
 
+    /// While `set` is given, what is drawn goes in it: every element
+    /// [`crate::sets::takes_set`] that a commit inserts without sets of
+    /// its own, in the same undo step. The app sets it around a drawing
+    /// tool's input and clears it after.
+    pub fn stamp_sets(&mut self, set: Option<ElementId>) {
+        self.stamp = set;
+    }
+
     pub fn commit(&mut self, tx: Transaction) -> Result<(), ModelError> {
         if tx.ops.is_empty() {
             return Ok(());
         }
         let mut tx = tx;
+        if let Some(set) = self.stamp.filter(|s| self.model.get(*s).is_some()) {
+            crate::sets::stamp(&mut tx, set);
+        }
         self.apply_settled(&mut tx)?;
         self.undo.push(Step::new(tx));
         self.redo.clear();

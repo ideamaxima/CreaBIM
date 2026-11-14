@@ -48,6 +48,7 @@ mod svgicon;
 mod tempdims;
 mod textures;
 mod theme;
+mod toolsets;
 mod tooltabs;
 mod trace;
 mod tracker;
