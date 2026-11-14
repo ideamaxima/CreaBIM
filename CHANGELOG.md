@@ -86,6 +86,7 @@ Issue and pull request numbers refer to the upstream repository.
   large it was left.
 
 ### Fixed
+- Walls drawn on a face and snapped face to face now join as one corner even when nearly in line, and follow each other when one is dragged; a wall ending nearly along another no longer shoots out metres past it.
 - A colour picked in Properties or Object styles no longer draws darker than its swatch: colour fields now pick in sRGB, as CreaBIM keeps colours (drawn lines, object styles, annotation and text colours, master shapes, revision clouds, vector pictures).
 - Graphic styles: ticking a colour no longer makes its row taller.
 - A DXF with blocks in arrays inside arrays no longer hangs the app on
