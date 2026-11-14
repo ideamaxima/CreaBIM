@@ -24,7 +24,7 @@ fn key(t: Tool) -> String {
 
 /// Does `tool` draw anything to put in a set?
 pub fn draws(tool: Tool) -> bool {
-    !matches!(tool, Tool::Select | Tool::Align)
+    !matches!(tool, Tool::Select | Tool::Align | Tool::Measure)
 }
 
 impl ToolSets {

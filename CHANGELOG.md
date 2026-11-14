@@ -20,6 +20,7 @@ Issue and pull request numbers refer to the upstream repository.
   aside); the Sets window says so in red as you type.
 
 ### Added
+- **Measure** tool, always beside Select and Align: two clicks measure between two points with the drawing snaps (Shift square, Alt no snaps) in plans, sections and 3D. Distance, ΔX, ΔY and angle (ΔZ in 3D) follow the pointer and stay in the status bar; nothing is drawn, saved or added to Undo.
 - Sets: a **Set** menu in the top bar of every drawing tool (after Type)
   picks the set what it draws goes in, in the same undo step. Each tool
   keeps its own, saved with the project. Sets off in the view are greyed

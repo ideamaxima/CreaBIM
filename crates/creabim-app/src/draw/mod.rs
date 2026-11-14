@@ -2,3 +2,4 @@
 //! and `app` only hook them in.
 
 pub mod line;
+pub mod measure;

@@ -35,7 +35,7 @@ pub enum Entry {
 pub const TABS: [&str; 5] = ["Model", "Draw", "Annotate", "View", "Manage"];
 
 /// On every tab, before it.
-pub const ALWAYS: [Tool; 2] = [Tool::Select, Tool::Align];
+pub const ALWAYS: [Tool; 3] = [Tool::Select, Tool::Align, Tool::Measure];
 
 /// What tab `tab` holds.
 pub fn entries(tab: usize) -> Vec<Entry> {

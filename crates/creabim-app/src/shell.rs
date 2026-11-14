@@ -164,6 +164,7 @@ pub(crate) fn tool_icon(t: Tool) -> &'static str {
         Tool::Footing => "footing",
         Tool::Level => "level",
         Tool::Align => "align-start-vertical",
+        Tool::Measure => "ruler-dimension-line",
         Tool::Object => "object",
         Tool::Extrusion => "extrusion",
         Tool::Sweep => "sweep",
@@ -182,7 +183,7 @@ pub(crate) fn tool_icon(t: Tool) -> &'static str {
 
 fn tool_group(t: Tool) -> u8 {
     match t {
-        Tool::Select | Tool::Align => 0,
+        Tool::Select | Tool::Align | Tool::Measure => 0,
         Tool::Wall
         | Tool::Door
         | Tool::Window
