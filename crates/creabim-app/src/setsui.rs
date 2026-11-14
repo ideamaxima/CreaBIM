@@ -87,7 +87,9 @@ impl CreaBimApp {
             .open(&mut open)
             .default_pos(area.min + Vec2::new(16.0, 56.0))
             .constrain_to(area)
-            .default_size([560.0, (area.height() - 72.0).clamp(360.0, 640.0)])
+            // as tall as the Catalogue: down to the same margin above the
+            // app's bottom edge
+            .default_size([560.0, (area.height() - 56.0 - 160.0).max(360.0)])
             .min_width(560.0)
             .resizable([true, true])
             .collapsible(false)
