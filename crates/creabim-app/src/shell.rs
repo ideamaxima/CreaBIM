@@ -367,6 +367,58 @@ pub(crate) const VIEW_ACTIONS: &[&str] = &[
     "sheet.guides",
 ];
 
+/// Select's chips (MU39): the shape a drag takes (box, circle, lasso) and
+/// how it joins what is selected. Plans and the Masters view show them.
+pub(crate) fn select_chips() -> Vec<Value> {
+    let iseg = |items: Vec<(String, &str, bool, &str)>| {
+        json!({"kind": "seg", "items": items
+            .into_iter()
+            .map(|(id, icon, on, h)| json!({"id": id, "label": "", "icon": icon, "on": on, "hint": h}))
+            .collect::<Vec<_>>()})
+    };
+    use crate::boxsel::{Combine as C, Shape as S};
+    let shape = crate::boxsel::shape();
+    let mut sel_opts = vec![iseg(vec![
+        ("sel.shape:0".into(), "sel-box", shape == S::Box, "Box (B): drag a box; left to right takes what is inside, right to left what it touches"),
+        ("sel.shape:1".into(), "sel-circle", shape == S::Circle, "Circle: drag out a circle; it takes what it touches"),
+        ("sel.shape:2".into(), "sel-lasso", shape == S::Lasso, "Lasso: draw round what to take"),
+    ])];
+    let how = crate::boxsel::combine();
+    sel_opts.push(iseg(vec![
+        (
+            "sel.combine:0".into(),
+            "sel-new",
+            how == C::New,
+            "New: what you take replaces the selection",
+        ),
+        (
+            "sel.combine:1".into(),
+            "sel-add",
+            how == C::Add,
+            "Add (Shift): what you take joins the selection",
+        ),
+        (
+            "sel.combine:2".into(),
+            "sel-sub",
+            how == C::Subtract,
+            "Subtract (Ctrl): what you take leaves the selection",
+        ),
+        (
+            "sel.combine:3".into(),
+            "sel-invert",
+            how == C::Invert,
+            "Invert: what you take flips, in or out",
+        ),
+        (
+            "sel.combine:4".into(),
+            "sel-intersect",
+            how == C::Intersect,
+            "Intersect: keep only what is both selected and taken",
+        ),
+    ]));
+    sel_opts
+}
+
 impl CreaBimApp {
     fn cmd_item(&self, c: Command) -> Item {
         let enabled = match c {
@@ -2858,46 +2910,7 @@ impl CreaBimApp {
                     .map(|(id, icon, on, h)| json!({"id": id, "label": "", "icon": icon, "on": on, "hint": h}))
                     .collect::<Vec<_>>()})
             };
-            use crate::boxsel::{Combine as C, Shape as S};
-            let shape = crate::boxsel::shape();
-            let mut sel_opts = vec![iseg(vec![
-                ("sel.shape:0".into(), "sel-box", shape == S::Box, "Box (B): drag a box; left to right takes what is inside, right to left what it touches"),
-                ("sel.shape:1".into(), "sel-circle", shape == S::Circle, "Circle: drag out a circle; it takes what it touches"),
-                ("sel.shape:2".into(), "sel-lasso", shape == S::Lasso, "Lasso: draw round what to take"),
-            ])];
-            let how = crate::boxsel::combine();
-            sel_opts.push(iseg(vec![
-                (
-                    "sel.combine:0".into(),
-                    "sel-new",
-                    how == C::New,
-                    "New: what you take replaces the selection",
-                ),
-                (
-                    "sel.combine:1".into(),
-                    "sel-add",
-                    how == C::Add,
-                    "Add (Shift): what you take joins the selection",
-                ),
-                (
-                    "sel.combine:2".into(),
-                    "sel-sub",
-                    how == C::Subtract,
-                    "Subtract (Ctrl): what you take leaves the selection",
-                ),
-                (
-                    "sel.combine:3".into(),
-                    "sel-invert",
-                    how == C::Invert,
-                    "Invert: what you take flips, in or out",
-                ),
-                (
-                    "sel.combine:4".into(),
-                    "sel-intersect",
-                    how == C::Intersect,
-                    "Intersect: keep only what is both selected and taken",
-                ),
-            ]));
+            let mut sel_opts = select_chips();
             if self.plan.edit.is_some() {
                 let k = crate::handles::pick();
                 sel_opts.push(iseg(vec![

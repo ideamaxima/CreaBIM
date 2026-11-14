@@ -50,8 +50,14 @@ pub struct MastersUi {
     pub tool: MTool,
     /// Centre (paper mm) and points per mm.
     camera: Option<(DVec2, f32)>,
-    /// The item picked.
+    /// The item picked last: its corners resize it, Properties shows it.
+    /// Set through [`MastersUi::pick_only`] and kept in `picked` too.
     pub sel: Option<usize>,
+    /// Everything picked (todo 1: more than one at a time, by Shift+click
+    /// or a box, circle or lasso).
+    pub picked: std::collections::BTreeSet<usize>,
+    /// Where a selection drag started on empty paper (screen).
+    boxing: Option<egui::Pos2>,
     drag: Option<Drag>,
     /// Move (M): the picked item follows the pointer from here (paper mm)
     /// until a click puts it down.
@@ -88,6 +94,67 @@ pub struct MastersUi {
     /// What the Shape tool draws: 0 a rectangle (two corners), 1 a circle
     /// (centre, then a point on it), 2 an ellipse (two corners of its box).
     pub shape_kind: u8,
+}
+
+impl MastersUi {
+    /// Pick `i` alone, or nothing.
+    pub fn pick_only(&mut self, i: Option<usize>) {
+        self.sel = i;
+        self.picked = i.into_iter().collect();
+    }
+
+    /// Add `i` to what is picked, or take it out when it is in already
+    /// (Shift+click).
+    pub fn toggle(&mut self, i: usize) {
+        if self.picked.remove(&i) {
+            if self.sel == Some(i) {
+                self.sel = self.picked.iter().next_back().copied();
+            }
+        } else {
+            self.picked.insert(i);
+            self.sel = Some(i);
+        }
+    }
+
+    /// Everything picked, the last picked among them, lowest first.
+    pub fn all_picked(&self) -> Vec<usize> {
+        let mut v: Vec<usize> = self.picked.iter().copied().collect();
+        if let Some(i) = self.sel {
+            if !v.contains(&i) {
+                v.push(i);
+                v.sort();
+            }
+        }
+        v
+    }
+
+    /// Join what a drag took to what is picked, as the bar's combine (or
+    /// Shift, Ctrl) says.
+    pub fn combine(&mut self, took: Vec<usize>, how: crate::boxsel::Combine) {
+        use crate::boxsel::Combine;
+        let mut set = self
+            .all_picked()
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>();
+        match how {
+            Combine::New => set = took.iter().copied().collect(),
+            Combine::Add => set.extend(took.iter().copied()),
+            Combine::Subtract => set.retain(|i| !took.contains(i)),
+            Combine::Invert => {
+                for i in &took {
+                    if !set.remove(i) {
+                        set.insert(*i);
+                    }
+                }
+            }
+            Combine::Intersect => set.retain(|i| took.contains(i)),
+        }
+        self.sel = match self.sel {
+            Some(i) if set.contains(&i) => Some(i),
+            _ => set.iter().next_back().copied(),
+        };
+        self.picked = set;
+    }
 }
 
 const SHAPE_KINDS: [(&str, &str, &str); 3] = [
@@ -431,7 +498,7 @@ impl CreaBimApp {
         if id.is_some() {
             self.masters.current = id;
         }
-        self.masters.sel = None;
+        self.masters.pick_only(None);
         self.masters.camera = None;
         self.masters.drawing.clear();
         self.prop_tab = PropTab::Master;
@@ -494,10 +561,11 @@ impl CreaBimApp {
         {
             return false;
         }
-        let Some(i) = self.masters.sel else {
+        let all = self.masters.all_picked();
+        if all.is_empty() {
             self.status = "Pick something on the master first.".into();
             return true;
-        };
+        }
         match c {
             Command::Move => {
                 self.masters.follow = None;
@@ -509,8 +577,10 @@ impl CreaBimApp {
             }
             Command::Rotate => {
                 self.edit_master("Turn", |t| {
-                    if let Some(it) = t.items.get_mut(i) {
-                        quarter_turn(it);
+                    for k in &all {
+                        if let Some(it) = t.items.get_mut(*k) {
+                            quarter_turn(it);
+                        }
                     }
                 });
                 self.status = "Turned a quarter. R again turns it further.".into();
@@ -518,22 +588,27 @@ impl CreaBimApp {
             Command::Duplicate | Command::Copy => {
                 let n = self.master().map_or(0, |(_, _, t)| t.items.len());
                 self.edit_master("Duplicate on master", |t| {
-                    if let Some(it) = t.items.get(i).cloned() {
-                        let mut it = it;
-                        it.shift(DVec2::new(5.0, -5.0));
-                        t.items.push(it);
+                    for k in &all {
+                        if let Some(mut it) = t.items.get(*k).cloned() {
+                            it.shift(DVec2::new(5.0, -5.0));
+                            t.items.push(it);
+                        }
                     }
                 });
-                self.masters.sel = Some(n);
+                // the copies picked, ready to drag
+                self.masters
+                    .combine((n..n + all.len()).collect(), crate::boxsel::Combine::New);
                 self.status = "A copy, 5 mm along: drag it where it goes.".into();
             }
             _ => {
                 self.edit_master("Delete from master", |t| {
-                    if i < t.items.len() {
-                        t.items.remove(i);
+                    for k in all.iter().rev() {
+                        if *k < t.items.len() {
+                            t.items.remove(*k);
+                        }
                     }
                 });
-                self.masters.sel = None;
+                self.masters.pick_only(None);
                 self.status = "Deleted. Ctrl+Z brings it back.".into();
             }
         }
@@ -590,7 +665,7 @@ impl CreaBimApp {
         } else {
             self.masters.field.as_str()
         };
-        vec![
+        let mut v = vec![
             json!({"kind": "toggle", "id": "master.tool:select", "icon": "mouse-pointer-2", "label": "Select", "on": t == MTool::Select,
                    "hint": "Pick, drag, and resize by its corners; M moves, R turns, Ctrl+D copies, Delete removes; arrows nudge 1 mm (Shift 5 mm)"}),
             json!({"kind": "toggle", "id": "master.tool:line", "icon": "slash", "label": "Line", "on": t == MTool::Line,
@@ -606,7 +681,19 @@ impl CreaBimApp {
                    "hint": "A guide: two clicks, a line to draw by and snap to; nearly level or upright, it goes straight. Kept with the master, never printed"}),
             json!({"kind": "button", "id": "master.picture", "icon": "image", "label": "Picture",
                    "hint": "A logo or picture: an SVG comes in as a crisp vector logo, a PNG or JPEG as a picture. As many as you like; drag its corners to size it"}),
-        ]
+        ];
+        // Select's box, circle, lasso and how they join, as in plans
+        // (the header draws single buttons: each chip of a group as one)
+        if t == MTool::Select {
+            for seg in crate::app::shell::select_chips() {
+                for c in seg["items"].as_array().into_iter().flatten() {
+                    let mut c = c.clone();
+                    c["kind"] = json!("toggle");
+                    v.push(c);
+                }
+            }
+        }
+        v
     }
 
     /// The Masters view's header menus.
@@ -762,7 +849,7 @@ impl CreaBimApp {
                 if let Some((id, n, _)) = self.master() {
                     self.delete_template(id);
                     self.masters.current = None;
-                    self.masters.sel = None;
+                    self.masters.pick_only(None);
                     self.status = format!(
                         "{n} deleted; its sheets have the built-in block. Ctrl+Z brings it back."
                     );
@@ -983,7 +1070,7 @@ impl CreaBimApp {
                     shapes,
                 })
             });
-            self.masters.sel = Some(n);
+            self.masters.pick_only(Some(n));
             self.masters.tool = MTool::Select;
             self.prop_tab = PropTab::Master;
             self.status = format!(
@@ -1026,7 +1113,7 @@ impl CreaBimApp {
                 opacity: 1.0,
             })
         });
-        self.masters.sel = Some(n);
+        self.masters.pick_only(Some(n));
         self.masters.tool = MTool::Select;
         self.prop_tab = PropTab::Master;
         self.status = "Picture placed: drag it into place, its corners size it.".into();
@@ -1060,7 +1147,7 @@ impl CreaBimApp {
                 }
             }
         });
-        self.masters.sel = Some(to);
+        self.masters.pick_only(Some(to));
     }
 
     fn add_master(&mut self, name: String, t: SheetTemplate) {
@@ -1345,10 +1432,23 @@ impl CreaBimApp {
         // the picked item as a drag, a resize or a Move leaves it
         let here_raw = response.hover_pos().map(to_w);
         let mut items = t.items.clone();
+        // a move takes everything picked along
+        let moved = match (self.masters.drag, self.masters.follow, here_raw) {
+            (Some(Drag::Move(_, d)), _, _) => Some(d),
+            (_, Some(from), Some(w)) if from.is_finite() => Some(w - from),
+            _ => None,
+        };
+        if let Some(d) = moved {
+            for k in self.masters.all_picked() {
+                if let Some(it) = items.get_mut(k) {
+                    it.shift(d);
+                }
+            }
+        }
         if let Some(i) = self.masters.sel {
             if let Some(it) = items.get_mut(i) {
                 match self.masters.drag {
-                    Some(Drag::Move(_, d)) => it.shift(d),
+                    Some(Drag::Move(..)) => {}
                     Some(Drag::Size(anchor, from, now)) => {
                         let (a, f, n) = (anchor - o, from - o, now - o);
                         let k = (n - a) / (f - a);
@@ -1357,11 +1457,6 @@ impl CreaBimApp {
                         }
                     }
                     None => {}
-                }
-                if let (Some(from), Some(w)) = (self.masters.follow, here_raw) {
-                    if from.is_finite() {
-                        it.shift(w - from);
-                    }
                 }
             }
         }
@@ -1548,6 +1643,23 @@ impl CreaBimApp {
         }
         // the picked item's box and corner handles
         let mut handles: Vec<(egui::Pos2, DVec2, DVec2)> = vec![];
+        // the others picked: a box round each
+        let picked_all = self.masters.all_picked();
+        for k in picked_all.iter().filter(|k| Some(**k) != self.masters.sel) {
+            if let Some(it) = items.get(*k) {
+                let (lo, hi) = match text_rects.iter().find(|(j, _)| j == k) {
+                    Some((_, r)) => (to_w(r.left_bottom()) - o, to_w(r.right_top()) - o),
+                    None => item_box(it),
+                };
+                painter.rect_stroke(
+                    Rect::from_two_pos(to_s(o + lo), to_s(o + hi)).expand(3.0),
+                    2.0,
+                    egui::Stroke::new(1.0, accent),
+                    egui::StrokeKind::Middle,
+                );
+            }
+        }
+        let one = picked_all.len() <= 1;
         if let Some(it) = self.masters.sel.and_then(|i| items.get(i)) {
             let (lo, hi) = match text_rects
                 .iter()
@@ -1564,12 +1676,16 @@ impl CreaBimApp {
                 egui::StrokeKind::Middle,
             );
             // each corner, and the one across from it that stays put
+            // corners resize one thing picked alone
             for (c, far) in [
                 (DVec2::new(lo.x, lo.y), DVec2::new(hi.x, hi.y)),
                 (DVec2::new(hi.x, lo.y), DVec2::new(lo.x, hi.y)),
                 (DVec2::new(hi.x, hi.y), DVec2::new(lo.x, lo.y)),
                 (DVec2::new(lo.x, hi.y), DVec2::new(hi.x, lo.y)),
-            ] {
+            ]
+            .into_iter()
+            .filter(|_| one)
+            {
                 let s = to_s(o + c);
                 let s = s + (s - r.center()).normalized() * 3.0;
                 painter.rect_filled(Rect::from_center_size(s, egui::vec2(7.0, 7.0)), 1.0, accent);
@@ -1589,7 +1705,7 @@ impl CreaBimApp {
         targets.extend(margin.iter().take(4));
         let moving = self.masters.drag.is_some() || self.masters.follow.is_some();
         for (i, it) in t.items.iter().enumerate() {
-            if Some(i) == self.masters.sel && moving {
+            if moving && picked_all.contains(&i) {
                 continue;
             }
             targets.extend(it.points().iter().map(|p| o + *p));
@@ -1690,12 +1806,15 @@ impl CreaBimApp {
                 self.masters.follow = None;
                 self.status = "Move: left where it was.".into();
             } else if response.clicked() {
-                if let (Some(i), Some((w, _))) = (self.masters.sel, here) {
+                if let (false, Some((w, _))) = (picked_all.is_empty(), here) {
                     // the grabbed point lands on the snap
                     let d = w - from;
+                    let all = picked_all.clone();
                     self.edit_master("Move", |t| {
-                        if let Some(it) = t.items.get_mut(i) {
-                            it.shift(d);
+                        for k in &all {
+                            if let Some(it) = t.items.get_mut(*k) {
+                                it.shift(d);
+                            }
                         }
                     });
                 }
@@ -1747,20 +1866,87 @@ impl CreaBimApp {
                             {
                                 self.masters.drag = Some(Drag::Size(*far, *c, *c));
                             } else if let Some(i) = picked_at(w) {
-                                self.masters.sel = Some(i);
+                                // grabbing one of several picked moves them
+                                // all; another, it alone (Shift adds it)
+                                if shift_held {
+                                    if !self.masters.picked.contains(&i) {
+                                        self.masters.toggle(i);
+                                    }
+                                } else if !picked_all.contains(&i) {
+                                    self.masters.pick_only(Some(i));
+                                } else {
+                                    self.masters.sel = Some(i);
+                                }
                                 self.masters.guide_sel = None;
                                 self.masters.drag = Some(Drag::Move(w, DVec2::ZERO));
                             } else if let Some(g) = guide_at(w) {
                                 self.masters.guide_sel = Some(g);
-                                self.masters.sel = None;
+                                self.masters.pick_only(None);
                                 self.masters.guide_drag = Some((g, w, DVec2::ZERO));
                             } else if let Some(e) = border_edge(p) {
                                 // the border's edge, dragged: its margin
                                 self.masters.border_sel = true;
-                                self.masters.sel = None;
+                                self.masters.pick_only(None);
                                 self.masters.guide_sel = None;
                                 let v = [blo.x, blo.y, bhi.x, bhi.y][e];
                                 self.masters.border_drag = Some((e, v));
+                            } else {
+                                // empty paper: a box, circle or lasso picks
+                                self.masters.boxing = Some(p);
+                                crate::boxsel::trace(p, true);
+                            }
+                        }
+                    }
+                    if let Some(start) = self.masters.boxing {
+                        if let Some(now) = response.hover_pos().or(response.interact_pointer_pos())
+                        {
+                            crate::boxsel::trace(now, false);
+                            crate::boxsel::draw(&painter, start, now);
+                            if response.drag_stopped_by(egui::PointerButton::Primary) {
+                                self.masters.boxing = None;
+                                let crossing = crate::boxsel::crossing(start, now);
+                                // each item by its points on screen (a text
+                                // by its box's corners)
+                                let took: Vec<usize> = items
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|(k, it)| {
+                                        let pts: Vec<egui::Pos2> =
+                                            match text_rects.iter().find(|(j, _)| j == k) {
+                                                Some((_, r)) => vec![
+                                                    r.left_top(),
+                                                    r.right_top(),
+                                                    r.right_bottom(),
+                                                    r.left_bottom(),
+                                                ],
+                                                None => {
+                                                    let (lo, hi) = item_box(it);
+                                                    let mut v: Vec<egui::Pos2> = it
+                                                        .points()
+                                                        .iter()
+                                                        .map(|p| to_s(o + *p))
+                                                        .collect();
+                                                    if v.is_empty() {
+                                                        v = vec![to_s(o + lo), to_s(o + hi)];
+                                                    }
+                                                    v
+                                                }
+                                            };
+                                        crate::boxsel::takes(start, now, &pts, crossing)
+                                    })
+                                    .map(|(k, _)| k)
+                                    .collect();
+                                let ctrl = ui.input(|i| i.modifiers.command);
+                                let how = crate::boxsel::combine_with(shift_held, ctrl);
+                                self.masters.combine(took, how);
+                                self.masters.guide_sel = None;
+                                self.masters.border_sel = false;
+                                let n = self.masters.all_picked().len();
+                                self.status = if n == 0 {
+                                    "Nothing picked.".into()
+                                } else {
+                                    format!("{n} picked: drag one to move them all; Delete, Ctrl+D, M, R and the arrows act on all.")
+                                };
                             }
                         }
                     }
@@ -1837,10 +2023,13 @@ impl CreaBimApp {
                     }
                     if response.drag_stopped_by(egui::PointerButton::Primary) {
                         match (self.masters.sel, self.masters.drag.take()) {
-                            (Some(i), Some(Drag::Move(_, d))) if d.length() > 1e-9 => {
+                            (Some(_), Some(Drag::Move(_, d))) if d.length() > 1e-9 => {
+                                let all = self.masters.all_picked();
                                 self.edit_master("Move", |t| {
-                                    if let Some(it) = t.items.get_mut(i) {
-                                        it.shift(d);
+                                    for k in &all {
+                                        if let Some(it) = t.items.get_mut(*k) {
+                                            it.shift(d);
+                                        }
                                     }
                                 });
                             }
@@ -1864,7 +2053,12 @@ impl CreaBimApp {
                     if response.clicked() {
                         let s = response.interact_pointer_pos();
                         let at = s.map(to_w);
-                        self.masters.sel = at.and_then(picked_at);
+                        match (shift_held, at.and_then(picked_at)) {
+                            // Shift+click adds or takes out (todo 1)
+                            (true, Some(i)) => self.masters.toggle(i),
+                            (true, None) => {}
+                            (false, hit) => self.masters.pick_only(hit),
+                        }
                         self.masters.guide_sel = if self.masters.sel.is_none() {
                             at.and_then(guide_at)
                         } else {
@@ -1892,6 +2086,13 @@ impl CreaBimApp {
                             self.masters.guide_sel = None;
                         }
                     }
+                    // Ctrl+A picks everything drawn
+                    if hovered && !typing && ui.input(|k| k.modifiers.command) && keys(egui::Key::A)
+                    {
+                        self.masters
+                            .combine((0..t.items.len()).collect(), crate::boxsel::Combine::New);
+                        self.status = format!("{} picked.", t.items.len());
+                    }
                     if self.masters.sel.is_some() && hovered && !typing {
                         let i = self.masters.sel.unwrap_or(0);
                         let step = if shift_held { 5.0 } else { 1.0 };
@@ -1907,9 +2108,12 @@ impl CreaBimApp {
                             DVec2::new((r as i32 - l as i32) as f64, (u as i32 - dn as i32) as f64)
                                 * step;
                         if d != DVec2::ZERO {
+                            let all = self.masters.all_picked();
                             self.edit_master("Nudge", |t| {
-                                if let Some(it) = t.items.get_mut(i) {
-                                    it.shift(d);
+                                for k in &all {
+                                    if let Some(it) = t.items.get_mut(*k) {
+                                        it.shift(d);
+                                    }
                                 }
                             });
                         }
@@ -1927,7 +2131,7 @@ impl CreaBimApp {
                         } else if !cmd && keys(egui::Key::R) {
                             self.masters_command(Command::Rotate);
                         } else if keys(egui::Key::Escape) {
-                            self.masters.sel = None;
+                            self.masters.pick_only(None);
                         }
                     }
                 }
@@ -1980,7 +2184,7 @@ impl CreaBimApp {
                                             })
                                         });
                                     if made {
-                                        self.masters.sel = Some(n);
+                                        self.masters.pick_only(Some(n));
                                         self.status = format!(
                                             "{} drawn: its pen, fill and opacity are in Properties.",
                                             SHAPE_KINDS[kind as usize % 3].0
@@ -2034,7 +2238,7 @@ impl CreaBimApp {
                                     opacity: 1.0,
                                 })
                             });
-                            self.masters.sel = Some(n);
+                            self.masters.pick_only(Some(n));
                         }
                     }
                 }
@@ -2099,7 +2303,7 @@ impl CreaBimApp {
                                     angle: 0.0,
                                 })
                             });
-                            self.masters.sel = Some(n);
+                            self.masters.pick_only(Some(n));
                             self.prop_tab = PropTab::Master;
                             self.status =
                                 "Placed. Its words, size and alignment are in Properties.".into();
@@ -2499,7 +2703,7 @@ impl CreaBimApp {
                 })
                 .clicked()
                 {
-                    self.masters.sel = Some(*k);
+                    self.masters.pick_only(Some(*k));
                     self.masters.border_sel = false;
                     self.masters.guide_sel = None;
                 }
@@ -2555,6 +2759,15 @@ impl CreaBimApp {
         let Some(i) = self.masters.sel.filter(|i| *i < t.items.len()) else {
             return;
         };
+        let n = self.masters.all_picked().len();
+        if n > 1 {
+            crate::props::section(ui, &format!("{n} picked"));
+            ui.label(
+                egui::RichText::new("Dragging, the arrows, Delete, Ctrl+D, M and R act on all of them. Below: the last one picked.")
+                    .weak()
+                    .small(),
+            );
+        }
         let it = t.items[i].clone();
         let title = match &it {
             TitleItem::Text { text, .. } if text.contains('{') => "Picked field",
@@ -2998,7 +3211,7 @@ mod tests {
             .iter()
             .position(|it| matches!(it, TitleItem::Text { .. }))
             .expect("a text in the master");
-        app.masters.sel = Some(i);
+        app.masters.pick_only(Some(i));
         type_into(&mut app, master_text_id(id, i), &["X", "Y"]);
         let (_, _, t) = app.master().unwrap();
         let TitleItem::Text { text, .. } = &t.items[i] else {
@@ -3186,6 +3399,122 @@ mod tests {
             (lo - DVec2::new(5.0, -5.0)).length() < 1e-9
                 && (hi - DVec2::new(5.0, 5.0)).length() < 1e-9
         );
+    }
+
+    #[test]
+    fn shift_click_adds_and_takes_out_and_a_plain_pick_starts_again() {
+        let mut m = MastersUi::default();
+        m.pick_only(Some(2));
+        m.toggle(5);
+        m.toggle(7);
+        assert_eq!(m.all_picked(), vec![2, 5, 7]);
+        assert_eq!(m.sel, Some(7), "the last added is the one shown");
+        m.toggle(7);
+        assert_eq!(m.all_picked(), vec![2, 5]);
+        assert_eq!(m.sel, Some(5));
+        m.pick_only(Some(1));
+        assert_eq!(m.all_picked(), vec![1]);
+        m.pick_only(None);
+        assert!(m.all_picked().is_empty());
+    }
+
+    #[test]
+    fn a_drag_joins_what_it_takes_as_the_bar_says() {
+        use crate::boxsel::Combine;
+        let mut m = MastersUi::default();
+        m.combine(vec![1, 2, 3], Combine::New);
+        assert_eq!(m.all_picked(), vec![1, 2, 3]);
+        m.combine(vec![4], Combine::Add);
+        assert_eq!(m.all_picked(), vec![1, 2, 3, 4]);
+        m.combine(vec![2], Combine::Subtract);
+        assert_eq!(m.all_picked(), vec![1, 3, 4]);
+        m.combine(vec![3, 5], Combine::Invert);
+        assert_eq!(m.all_picked(), vec![1, 4, 5]);
+        m.combine(vec![4, 5, 6], Combine::Intersect);
+        assert_eq!(m.all_picked(), vec![4, 5]);
+        assert!(m.sel.is_some_and(|i| m.picked.contains(&i)));
+    }
+
+    #[test]
+    fn a_box_takes_what_is_inside_or_leftward_what_it_touches() {
+        use egui::pos2;
+        crate::boxsel::set_shape(crate::boxsel::Shape::Box);
+        let line = [pos2(0.0, 50.0), pos2(200.0, 50.0)];
+        // rightward, only what lies wholly inside
+        assert!(!crate::boxsel::takes(
+            pos2(50.0, 0.0),
+            pos2(100.0, 100.0),
+            &line,
+            false
+        ));
+        assert!(crate::boxsel::takes(
+            pos2(-10.0, 0.0),
+            pos2(210.0, 100.0),
+            &line,
+            false
+        ));
+        // leftward, a line crossing it though both ends are outside
+        assert!(crate::boxsel::takes(
+            pos2(100.0, 0.0),
+            pos2(50.0, 100.0),
+            &line,
+            true
+        ));
+        assert!(!crate::boxsel::takes(
+            pos2(100.0, 60.0),
+            pos2(50.0, 100.0),
+            &line,
+            true
+        ));
+        // a circle round where the drag started
+        crate::boxsel::set_shape(crate::boxsel::Shape::Circle);
+        assert!(crate::boxsel::takes(
+            pos2(100.0, 50.0),
+            pos2(100.0, 70.0),
+            &line,
+            true
+        ));
+        crate::boxsel::set_shape(crate::boxsel::Shape::Box);
+    }
+
+    #[test]
+    fn delete_and_duplicate_act_on_everything_picked() {
+        let mut app = crate::app::test_app();
+        app.open_master(None);
+        app.add_master("Studio".into(), tb::minimal_band());
+        let n = app.master().expect("a master").2.items.len();
+        assert!(n >= 3, "the band has items: {n}");
+        app.masters.combine(vec![0, 1], crate::boxsel::Combine::New);
+        app.masters_command(Command::Duplicate);
+        assert_eq!(app.master().unwrap().2.items.len(), n + 2);
+        assert_eq!(
+            app.masters.all_picked(),
+            vec![n, n + 1],
+            "the copies picked"
+        );
+        app.masters_command(Command::Delete);
+        assert_eq!(app.master().unwrap().2.items.len(), n);
+        assert!(app.masters.all_picked().is_empty());
+    }
+
+    #[test]
+    fn select_shows_box_circle_and_lasso_as_buttons_in_the_header() {
+        let mut app = crate::app::test_app();
+        app.masters.tool = MTool::Select;
+        let c = app.master_controls();
+        for id in ["sel.shape:0", "sel.shape:1", "sel.shape:2", "sel.combine:1"] {
+            let b = c
+                .iter()
+                .find(|c| c["id"] == id)
+                .unwrap_or_else(|| panic!("{id}"));
+            // the header draws toggles and buttons, not chip groups
+            assert_eq!(b["kind"], "toggle", "{id}");
+        }
+        app.masters.tool = MTool::Line;
+        assert!(!app
+            .master_controls()
+            .iter()
+            .any(|c| c["id"] == "sel.shape:1"));
     }
 
     #[test]

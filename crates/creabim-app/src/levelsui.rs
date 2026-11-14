@@ -967,7 +967,7 @@ mod tests {
     fn fit_stays_beside_the_gap_on_one_line() {
         let ctx = egui::Context::default();
         let mut sizes = vec![];
-        let _ = ctx.run_ui(Default::default(), |ui| {
+        let mut out = ctx.run_ui(Default::default(), |ui| {
             for fit in [false, true] {
                 let r = ui.allocate_ui(egui::vec2(40.0, 100.0), |ui| {
                     to_next(ui, 3.0, "First Floor", fit);
@@ -975,6 +975,8 @@ mod tests {
                 sizes.push(r.response.rect.size());
             }
         });
+        // dropped unapplied, it trips a debug check
+        out.textures_delta.clear();
         // neither taller nor wider: the window stays as it is
         assert_eq!(sizes[0], sizes[1], "the cell changed size with Fit");
     }
@@ -986,13 +988,15 @@ mod tests {
         let ctx = egui::Context::default();
         let mut height = 0.0;
         let mut asks = vec![];
-        let _ = ctx.run_ui(Default::default(), |ui| {
+        let mut out = ctx.run_ui(Default::default(), |ui| {
             let line = ui.spacing().interact_size.y;
             let r = ui.allocate_ui(egui::vec2(40.0, 100.0), |ui| {
                 row_actions(ui, ElementId::new(), true, &mut asks);
             });
             height = r.response.rect.height() / line;
         });
+        // dropped unapplied, it trips a debug check
+        out.textures_delta.clear();
         assert!(height < 1.5, "the actions took {height} lines");
     }
 }
