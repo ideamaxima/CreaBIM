@@ -41,6 +41,8 @@ mod drafting;
 mod editui;
 #[path = "gridvis.rs"]
 mod gridvis;
+#[path = "guidemenu.rs"]
+mod guidemenu;
 #[path = "helpui.rs"]
 pub(crate) mod helpui;
 #[path = "importui.rs"]
@@ -4680,7 +4682,7 @@ impl CreaBimApp {
                 Tool::Guide => {
                     let typed = self.plan.tracker.length();
                     let (ga, gb) =
-                        planview::guide_line(a.truncate(), p, self.plan.guide_edge, typed)
+                        crate::guidetool::guide_line(a.truncate(), p, self.plan.guide_edge, typed)
                             .unwrap_or((a.truncate(), p));
                     draw_guide_3d(painter, project, ga.extend(z), gb.extend(z), stroke);
                     if let Some(sb) = project(at) {
