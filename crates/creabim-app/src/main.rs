@@ -12,6 +12,7 @@ mod builds;
 mod camera;
 mod centres;
 mod choices;
+mod colourpick;
 mod commands;
 mod detailtool;
 mod draw;
