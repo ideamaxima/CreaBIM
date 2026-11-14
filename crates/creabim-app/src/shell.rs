@@ -811,6 +811,7 @@ impl CreaBimApp {
                 ));
                 items
             }
+            "toolset" => crate::toolsets::menu(&self.plan, self.doc.model(), self.active_view),
             key => self
                 .drafting_menu(key)
                 .or_else(|| self.grid_vis_menu(key))
@@ -1474,8 +1475,12 @@ impl CreaBimApp {
                     return;
                 }
                 if let Some(t) = index.and_then(|i| Tool::ALL.get(i)) {
-                    // a detail path being drawn is kept, not dropped
+                    // a detail path being drawn is kept, not dropped, in
+                    // the Detail tool's set
+                    let set = crate::toolsets::stamp(&self.plan, self.doc.model());
+                    self.doc.stamp_sets(set);
                     crate::detailtool::keep(&mut self.doc, &mut self.plan, &mut self.selection);
+                    self.doc.stamp_sets(None);
                     self.plan.tool = *t;
                     self.plan.cancel();
                     // a chain begun in 3D ends with its tool (MU40)
@@ -2057,6 +2062,9 @@ impl CreaBimApp {
             _ if self.similar_action(head, arg) => {}
             _ if self.app_action(ctx, head, arg) => {}
             _ if self.help_action(head, arg) => {}
+            "toolset" => {
+                self.status = crate::toolsets::action(&mut self.plan, self.doc.model(), arg);
+            }
             _ if self.wall_action(head, arg) => {}
             _ if self.level_action(head, arg) => {}
             _ => {
@@ -2728,6 +2736,11 @@ impl CreaBimApp {
                 "hint": "The type new elements are drawn as: they share its values, and follow it when it changes",
             }));
         }
+        options.extend(crate::toolsets::option(
+            &self.plan,
+            self.doc.model(),
+            self.active_view,
+        ));
         if tool == Tool::Wall {
             // straight, an arc, or a circle (MU40)
             options.push(seg([

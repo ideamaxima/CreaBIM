@@ -538,6 +538,8 @@ pub struct PlanState {
     pub details: crate::detailtool::DetailSettings,
     /// The Line tool's view and the look of the next line.
     pub line: crate::draw::line::LineTool,
+    /// The set each tool draws into (Features 21).
+    pub tool_sets: crate::toolsets::ToolSets,
     /// A view made in a pane that the app should open: a new detail view.
     pub want_view: Option<ElementId>,
     /// The Snap menu's Custom step being typed.
@@ -696,6 +698,7 @@ impl Default for PlanState {
             types: HashMap::new(),
             details: Default::default(),
             line: Default::default(),
+            tool_sets: Default::default(),
             want_view: None,
             step_prompt: None,
             temp: Default::default(),
@@ -835,8 +838,34 @@ impl Xf {
 }
 
 /// Show a view's drawing in `rect`. Returns a status message when an edit fails.
+/// What the active tool draws goes in its set (Features 21).
 #[allow(clippy::too_many_arguments)]
 pub fn show(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    doc: &mut Document,
+    view: ElementId,
+    kind: PaneKind,
+    plan: &Drawing,
+    state: &mut PlanState,
+    selection: &mut Selection,
+    style: PaneStyle,
+) -> Option<String> {
+    let set = crate::toolsets::stamp(state, doc.model());
+    let before = doc.model().revision();
+    doc.stamp_sets(set);
+    let r = show_view(ui, rect, doc, view, kind, plan, state, selection, style);
+    doc.stamp_sets(None);
+    if let Some(s) = set.filter(|_| doc.model().revision() != before) {
+        if let Some(w) = crate::toolsets::warning(doc.model(), view, s) {
+            state.status = Some(w);
+        }
+    }
+    r
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_view(
     ui: &mut egui::Ui,
     rect: Rect,
     doc: &mut Document,

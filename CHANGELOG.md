@@ -19,6 +19,11 @@ Issue and pull request numbers refer to the upstream repository.
   aside); the Sets window says so in red as you type.
 
 ### Added
+- Sets: a **Set** menu in the top bar of every drawing tool (after Type)
+  picks the set what it draws goes in, in the same undo step. Each tool
+  keeps its own, saved with the project. Sets off in the view are greyed
+  out; a tool whose set was switched off still draws into it, with a
+  warning, so nothing ends up outside its set.
 - Draw tab: **Line**. Two clicks draw a line in the plan or section
   clicked, shown in that view only (never in 3D, schedules or IFC). Type
   its length (Tab: angle) and press Enter; Shift keeps it square, Alt

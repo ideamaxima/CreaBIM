@@ -603,6 +603,13 @@ impl CreaBimApp {
                     .ok()
                     .flatten();
                 self.restore_areas(saved.as_deref());
+                // the set each tool draws into
+                self.plan.tool_sets =
+                    creabim_store::read_meta_value(path, crate::toolsets::META_KEY)
+                        .ok()
+                        .flatten()
+                        .map(|s| crate::toolsets::ToolSets::from_json(&s))
+                        .unwrap_or_default();
                 self.saved_revision = Some(self.doc.model().revision());
                 self.status = format!("Opened {path}");
                 // copies a Duplicate left on their originals (MU24)
@@ -637,7 +644,12 @@ impl CreaBimApp {
         }
         let r = creabim_store::save(&self.path, &self.doc).and_then(|_| {
             // the views open now, to reopen it on them
-            creabim_store::write_meta_value(&self.path, "ui_areas", &self.areas_json())
+            creabim_store::write_meta_value(&self.path, "ui_areas", &self.areas_json())?;
+            creabim_store::write_meta_value(
+                &self.path,
+                crate::toolsets::META_KEY,
+                &self.plan.tool_sets.to_json(),
+            )
         });
         if r.is_ok() {
             let path = self.path.clone();
@@ -6751,7 +6763,10 @@ impl CreaBimApp {
                     .clicked()
                 {
                     // a detail path being drawn is kept, not dropped
+                    let set = crate::toolsets::stamp(&self.plan, self.doc.model());
+                    self.doc.stamp_sets(set);
                     crate::detailtool::keep(&mut self.doc, &mut self.plan, &mut self.selection);
+                    self.doc.stamp_sets(None);
                     self.plan.tool = t;
                     self.plan.cancel();
                 }
