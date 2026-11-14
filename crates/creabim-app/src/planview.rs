@@ -5662,6 +5662,9 @@ pub struct Ovr {
     pub cut: f32,
     /// Its line pattern, drawn as it prints; none is solid.
     pub dashes: Option<crate::linepattern::Dashes>,
+    /// The colour is the element's own (a drawn line's or shape's): dark
+    /// paper shows it as it is, not turned over.
+    pub own_colour: bool,
 }
 
 impl Default for Ovr {
@@ -5673,6 +5676,7 @@ impl Default for Ovr {
             proj: 1.0,
             cut: 1.0,
             dashes: None,
+            own_colour: false,
         }
     }
 }
@@ -5779,6 +5783,33 @@ pub fn draw_item_with(
     let hatch = paper::HATCH_SPACING * mm;
     // annotation text is a fixed size on paper, so it scales with zoom
     let text_px = |size: f64| (size * mm * xf.scale as f64) as f32;
+    // a line in a colour of its own keeps it on dark paper
+    let own_line = o.own_colour && !selected && matches!(item, PlanItem::Line { .. });
+    let first = own_line.then(|| painter.add(egui::Shape::Noop));
+    draw_item_match(
+        painter, xf, item, selected, mm, o, highlight, ink, &grey, hatch, &text_px,
+    );
+    if let Some(first) = first {
+        let last = painter.add(egui::Shape::Noop);
+        keep_colours(painter.ctx(), painter.layer_id(), first, last);
+    }
+}
+
+/// [`draw_item_with`]'s drawing, item by item.
+#[allow(clippy::too_many_arguments)]
+fn draw_item_match(
+    painter: &egui::Painter,
+    xf: &Xf,
+    item: &PlanItem,
+    selected: bool,
+    mm: f64,
+    o: &Ovr,
+    highlight: Color32,
+    ink: Color32,
+    grey: &dyn Fn(u8) -> Color32,
+    hatch: f64,
+    text_px: &dyn Fn(f64) -> f32,
+) {
     match item {
         PlanItem::Hatched {
             points,

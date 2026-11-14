@@ -175,13 +175,24 @@ pub fn draw_fill(
         Color32::from_rgba_unmultiplied(r, g, b, (a.clamp(0.0, 1.0) * 255.0).round() as u8)
     };
     if let Some(c) = rgb {
+        let first = painter.add(egui::Shape::Noop);
         crate::planview::fill_polygon(painter, xf, points, c32(c, alpha));
+        let last = painter.add(egui::Shape::Noop);
+        crate::planview::keep_colours(painter.ctx(), painter.layer_id(), first, last);
     } else if selected {
         crate::planview::fill_polygon(painter, xf, points, c32([1.0, 0.8, 0.6], 0.25));
     }
     let colour = ink.map_or(default_ink, |c| c32(c, 1.0));
     let stroke = Stroke::new(0.6, colour);
+    let mark = || painter.add(egui::Shape::Noop);
+    // the fill's colour and a hatch in a colour of its own show as they
+    // are on dark paper; the drawing's ink turns over with the rest
+    let first = (ink.is_some() && !selected).then(mark);
     for (a, b) in lines {
         painter.line_segment([xf.to_screen(*a), xf.to_screen(*b)], stroke);
+    }
+    if let Some(first) = first {
+        let last = mark();
+        crate::planview::keep_colours(painter.ctx(), painter.layer_id(), first, last);
     }
 }

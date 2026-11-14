@@ -108,6 +108,7 @@ pub fn own_look_of(
         proj: f.clamp(0.2, 6.0),
         cut: f.clamp(0.2, 6.0),
         dashes: crate::linepattern::Dashes::from_pattern(pattern),
+        own_colour: colour.is_some(),
         ..Default::default()
     }
 }
