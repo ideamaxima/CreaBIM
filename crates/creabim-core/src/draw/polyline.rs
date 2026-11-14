@@ -88,6 +88,9 @@ pub struct DraftPolyline {
     /// Drawn as a rectangle: it stays one.
     #[serde(default, skip_serializing_if = "is_free")]
     pub shape: ShapeKind,
+    /// Holes cut in a closed one, each a closed outline inside it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub holes: Vec<Vec<DVec2>>,
 }
 
 fn is_free(k: &ShapeKind) -> bool {
@@ -118,6 +121,7 @@ impl DraftPolyline {
             fill: ShapeFill::default(),
             outline: true,
             shape: ShapeKind::Free,
+            holes: vec![],
         }
     }
 
@@ -218,16 +222,141 @@ impl DraftPolyline {
         self.sides().iter().map(|(a, b)| a.distance(*b)).sum()
     }
 
-    /// The area inside, when closed (none when open).
+    /// The area inside, holes left out, when closed (none when open).
     pub fn area(&self) -> Option<f64> {
         if !self.closed || self.points.len() < 3 {
             return None;
         }
-        let n = self.points.len();
-        let twice: f64 = (0..n)
-            .map(|i| self.points[i].perp_dot(self.points[(i + 1) % n]))
-            .sum();
-        Some(twice.abs() / 2.0)
+        let ring = |p: &[DVec2]| crate::polygon::signed_area2(p).abs() / 2.0;
+        Some(ring(&self.points) - self.holes.iter().map(|h| ring(h)).sum::<f64>())
+    }
+
+    /// The sides of its holes.
+    pub fn hole_sides(&self) -> Vec<(DVec2, DVec2)> {
+        self.holes
+            .iter()
+            .flat_map(|h| (0..h.len()).map(move |i| (h[i], h[(i + 1) % h.len()])))
+            .collect()
+    }
+
+    /// The outline with its holes as one polygon, for filling.
+    pub fn fill_polygon(&self) -> Vec<DVec2> {
+        if self.holes.is_empty() {
+            self.points.clone()
+        } else {
+            crate::polygon::bridged(&self.points, &self.holes)
+        }
+    }
+
+    /// Where its middle is: the centre of its area, holes left out (its
+    /// corners' average when it has no area).
+    pub fn centroid(&self) -> DVec2 {
+        let ring = |p: &[DVec2]| {
+            let n = p.len();
+            let (mut a, mut c) = (0.0, DVec2::ZERO);
+            for i in 0..n {
+                let (u, v) = (p[i], p[(i + 1) % n]);
+                let k = u.perp_dot(v);
+                a += k;
+                c += (u + v) * k;
+            }
+            (
+                a.abs() / 2.0,
+                if a.abs() > 1e-12 {
+                    c / (3.0 * a)
+                } else {
+                    DVec2::ZERO
+                },
+            )
+        };
+        if !self.closed || self.points.len() < 3 {
+            return self.centre();
+        }
+        let (a0, c0) = ring(&self.points);
+        let (mut a, mut m) = (a0, c0 * a0);
+        for h in &self.holes {
+            let (ah, ch) = ring(h);
+            a -= ah;
+            m -= ch * ah;
+        }
+        if a > 1e-12 {
+            m / a
+        } else {
+            self.centre()
+        }
+    }
+
+    /// Cut outline `cutter` out of a closed one: inside it, a hole; across
+    /// its edge, it is bitten and comes back as free polylines (the
+    /// largest first, none when nothing is left). Err when it misses it or
+    /// the cut would leave a bad shape.
+    pub fn cut(&self, cutter: &[DVec2]) -> Result<Vec<DraftPolyline>, String> {
+        use crate::polygon::{contains, inside, outlines_cross, overlap, signed_area2};
+        use crate::regions::{faces, filled, Loop};
+        if !self.closed || self.points.len() < 3 || cutter.len() < 3 {
+            return Err("only a closed shape takes a hole".into());
+        }
+        let touches_hole = self.holes.iter().any(|h| overlap(h, cutter));
+        if inside(cutter, &self.points) && !outlines_cross(cutter, &self.points) && !touches_hole {
+            let mut out = self.clone();
+            out.holes.push(cutter.to_vec());
+            return Ok(vec![out]);
+        }
+        if !overlap(cutter, &self.points) {
+            return Err("the cut misses the shape: draw it on it".into());
+        }
+        // what is left: the shape's faces outside its holes and the cut
+        let mut loops: Vec<Loop> = vec![Loop {
+            points: self.points.clone(),
+            solid: false,
+        }];
+        loops.extend(self.holes.iter().map(|h| Loop {
+            points: h.clone(),
+            solid: false,
+        }));
+        loops.push(Loop {
+            points: cutter.to_vec(),
+            solid: false,
+        });
+        let kept: Vec<Loop> = faces(&loops, &[])
+            .into_iter()
+            .filter(|f| {
+                let s = f.sample;
+                contains(&self.points, s)
+                    && !self.holes.iter().any(|h| contains(h, s))
+                    && !contains(cutter, s)
+            })
+            .flat_map(|f| {
+                std::iter::once(f.outer)
+                    .chain(f.holes)
+                    .map(|points| Loop {
+                        points,
+                        solid: false,
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        // the kept faces merged where they meet
+        let rings = filled(&kept, &[]);
+        let (outers, holes): (Vec<_>, Vec<_>) =
+            rings.into_iter().partition(|r| signed_area2(r) > 0.0);
+        let mut pieces: Vec<DraftPolyline> = outers
+            .into_iter()
+            .map(|o| {
+                let mine: Vec<Vec<DVec2>> = holes
+                    .iter()
+                    .filter(|h| contains(&o, h[0]))
+                    .map(|h| h.iter().rev().copied().collect())
+                    .collect();
+                let mut p = self.clone();
+                p.points = o;
+                p.holes = mine;
+                p.shape = ShapeKind::Free;
+                p
+            })
+            .collect();
+        pieces.sort_by(|a, b| b.area().unwrap_or(0.0).total_cmp(&a.area().unwrap_or(0.0)));
+        Ok(pieces)
     }
 
     /// Is the fill drawn?
@@ -257,6 +386,11 @@ impl DraftPolyline {
         }
         if !(self.fill.scale.is_finite() && self.fill.scale > 0.0) {
             return Err("a fill's scale must be above zero".into());
+        }
+        if self.closed && !self.holes.is_empty() {
+            if let Some(why) = crate::slab::outline_problem(&self.points, true, &self.holes) {
+                return Err(why);
+            }
         }
         Ok(())
     }
@@ -314,6 +448,57 @@ mod tests {
         r.set_size(4.0, 1.0);
         assert!((r.points[0] - o).length() < 1e-9);
         assert!((r.area().unwrap() - 4.0).abs() < 1e-9);
+    }
+
+    fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<DVec2> {
+        vec![
+            DVec2::new(x0, y0),
+            DVec2::new(x1, y0),
+            DVec2::new(x1, y1),
+            DVec2::new(x0, y1),
+        ]
+    }
+
+    #[test]
+    fn a_cut_inside_is_a_hole_and_the_area_leaves_it_out() {
+        let p = square(true); // 2 × 3
+        let cut = p.cut(&rect(0.5, 0.5, 1.5, 1.5)).unwrap();
+        assert_eq!(cut.len(), 1);
+        assert_eq!(cut[0].holes.len(), 1);
+        assert!((cut[0].area().unwrap() - 5.0).abs() < 1e-9);
+        assert!(cut[0].validate().is_ok());
+        assert!(
+            p.cut(&rect(5.0, 5.0, 6.0, 6.0)).is_err(),
+            "a cut that misses"
+        );
+    }
+
+    #[test]
+    fn a_cut_across_the_edge_bites_and_one_through_it_splits() {
+        let p = square(true); // 2 × 3
+        let bitten = p.cut(&rect(1.0, -1.0, 3.0, 1.0)).unwrap();
+        assert_eq!(bitten.len(), 1);
+        assert!(
+            (bitten[0].area().unwrap() - 5.0).abs() < 1e-9,
+            "2 × 3 less 1 × 1"
+        );
+        assert_eq!(bitten[0].shape, ShapeKind::Free);
+        let split = p.cut(&rect(-1.0, 1.0, 3.0, 2.0)).unwrap();
+        assert_eq!(split.len(), 2);
+        assert!((split[0].area().unwrap() - 2.0).abs() < 1e-9);
+        assert!(
+            p.cut(&rect(-1.0, -1.0, 3.0, 4.0)).unwrap().is_empty(),
+            "all of it"
+        );
+    }
+
+    #[test]
+    fn its_centroid_leaves_its_holes_out() {
+        let mut p = square(true);
+        assert!((p.centroid() - DVec2::new(1.0, 1.5)).length() < 1e-9);
+        p.holes
+            .push(rect(0.0, 1.5, 2.0, 3.0).into_iter().rev().collect());
+        assert!((p.centroid() - DVec2::new(1.0, 0.75)).length() < 1e-9);
     }
 
     #[test]

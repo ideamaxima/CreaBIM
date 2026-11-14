@@ -890,6 +890,10 @@ pub struct Tag {
     /// its mark.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub material: bool,
+    /// What it reads, written by hand in Properties; none reads its host
+    /// (a drawn shape's area or perimeter, measured).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
 }
 
 impl Tag {
@@ -905,6 +909,7 @@ impl Tag {
             end: None,
             leader_end: None,
             material: false,
+            text: None,
         }
     }
 }

@@ -61,6 +61,8 @@ pub struct RectTool {
     pub view: Option<ElementId>,
     pub method: RectMethod,
     pub side: Option<(DVec2, DVec2)>,
+    /// The shape the next rectangle cuts a hole in (or bites).
+    pub hole_into: Option<ElementId>,
 }
 
 impl RectTool {
@@ -190,6 +192,9 @@ pub fn click(
     };
     state.pending = None;
     state.rect.clear();
+    if let Some(host) = state.rect.hole_into.take() {
+        return cut(doc, host, &quad, state, selection);
+    }
     let l = DraftPolyline::rectangle(view, quad, &state.line.look);
     let (w, h) = (quad[0].distance(quad[1]), quad[1].distance(quad[2]));
     let e = Element::new("Rectangle", ElementKind::DraftPolyline(l));
@@ -200,6 +205,56 @@ pub fn click(
         crate::units::len(h)
     ));
     doc.commit(Transaction::new("Draw rectangle").insert(e))
+}
+
+/// Cut `quad` out of shape `host`: a hole inside it, a bite across its
+/// edge (the largest piece keeps the shape, others are new shapes beside
+/// it); a cut that takes all of it deletes it.
+fn cut(
+    doc: &mut Document,
+    host: ElementId,
+    quad: &[DVec2; 4],
+    state: &mut PlanState,
+    selection: &mut Selection,
+) -> Result<(), ModelError> {
+    let Some(before) = doc.model().get(host).cloned() else {
+        state.status = Some("The shape is gone.".into());
+        return Ok(());
+    };
+    let ElementKind::DraftPolyline(l) = &before.kind else {
+        return Ok(());
+    };
+    let pieces = match l.cut(quad) {
+        Ok(p) => p,
+        Err(why) => {
+            state.status = Some(format!("No cut: {why}."));
+            return Ok(());
+        }
+    };
+    let mut tx = Transaction::new("Cut shape");
+    let n = pieces.len();
+    let mut pieces = pieces.into_iter();
+    match pieces.next() {
+        Some(first) => {
+            let mut after = before.clone();
+            after.kind = ElementKind::DraftPolyline(first);
+            tx = tx.replace(before.clone(), after);
+            for p in pieces {
+                tx = tx.insert(Element::new(&before.name, ElementKind::DraftPolyline(p)));
+            }
+            selection.only(host);
+        }
+        None => {
+            tx = tx.remove_cascade(doc.model(), host);
+            selection.set(None);
+        }
+    }
+    state.status = Some(match n {
+        0 => "The cut took all of it: the shape is gone. Ctrl+Z to undo.".into(),
+        1 => "Cut. Its holes are in Properties; Tab edits them. Ctrl+Z to undo.".into(),
+        k => format!("Cut in {k} pieces: the largest keeps the shape. Ctrl+Z to undo."),
+    });
+    doc.commit(tx)
 }
 
 /// The rectangle being drawn, to `hover`, and the tracker's pill by the
@@ -403,5 +458,50 @@ mod tests {
         assert!((r.area().unwrap() - 3.0).abs() < 1e-6, "3 wide, 1 tall");
         assert!(doc.undo());
         assert_eq!(doc.model().iter().count(), 1);
+    }
+
+    #[test]
+    fn armed_to_cut_a_rectangle_holes_the_shape_and_across_its_edge_bites_it() {
+        let mut doc = Document::new();
+        let v = Element::new(
+            "Section A",
+            ElementKind::View(creabim_core::View::section(
+                DVec2::ZERO,
+                DVec2::new(9.0, 0.0),
+                3.0,
+                true,
+            )),
+        );
+        let view = v.id;
+        doc.commit(Transaction::new("setup").insert(v)).unwrap();
+        let mut state = PlanState::default();
+        let mut sel = Selection::default();
+        let p = DVec2::new;
+        click(&mut doc, view, p(0.0, 0.0), &mut state, &mut sel).unwrap();
+        click(&mut doc, view, p(4.0, 3.0), &mut state, &mut sel).unwrap();
+        let host = sel.active.unwrap();
+        let shape = |doc: &Document| match &doc.model().get(host).unwrap().kind {
+            ElementKind::DraftPolyline(l) => l.clone(),
+            _ => panic!(),
+        };
+        // inside: a hole
+        state.rect.hole_into = Some(host);
+        click(&mut doc, view, p(1.0, 1.0), &mut state, &mut sel).unwrap();
+        click(&mut doc, view, p(2.0, 2.0), &mut state, &mut sel).unwrap();
+        assert_eq!(shape(&doc).holes.len(), 1);
+        assert!((shape(&doc).area().unwrap() - 11.0).abs() < 1e-9);
+        assert!(
+            state.rect.hole_into.is_none(),
+            "one cut, then drawing again"
+        );
+        // across its edge: bitten, no longer a rectangle
+        state.rect.hole_into = Some(host);
+        click(&mut doc, view, p(3.0, -1.0), &mut state, &mut sel).unwrap();
+        click(&mut doc, view, p(5.0, 1.0), &mut state, &mut sel).unwrap();
+        assert!(!shape(&doc).is_rectangle());
+        assert!((shape(&doc).area().unwrap() - 10.0).abs() < 1e-9);
+        // one undo takes the bite back
+        assert!(doc.undo());
+        assert!((shape(&doc).area().unwrap() - 11.0).abs() < 1e-9);
     }
 }

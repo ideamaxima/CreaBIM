@@ -229,6 +229,10 @@ pub fn centre(model: &Model, id: ElementId) -> Option<DVec3> {
         }
         // a room: its point on its floor
         ElementKind::Room(r) => r.at.extend(elevation(r.level)),
+        // a drawn shape: the middle of its area, on its view's paper
+        ElementKind::DraftPolyline(l) => {
+            creabim_core::DrawingFrame::of(model, l.view)?.to_model(l.centroid())
+        }
         // a ceiling: the middle of its outline, on its underside
         ElementKind::Ceiling(c) => {
             let o = c.outline(model)?;
@@ -935,6 +939,21 @@ pub fn annotations(model: &Model, view_id: ElementId, view: &View) -> Vec<PlanIt
                         look_of(model, t.style, t.color),
                         view.scale / 1000.0,
                         creabim_core::styles::active_pack(model).room_tags,
+                    ));
+                    continue;
+                }
+                // a drawn shape's area or perimeter: plain text, as a room's
+                if let Some(ElementKind::DraftPolyline(l)) = model.get(t.host).map(|h| &h.kind) {
+                    let text = t
+                        .text
+                        .clone()
+                        .unwrap_or_else(|| crate::draw::polyline::reading(model, l, &t.fields));
+                    out.push(room_tag_item(
+                        e.id,
+                        text,
+                        centre + t.offset,
+                        look_of(model, t.style, t.color),
+                        view.scale / 1000.0,
                     ));
                     continue;
                 }

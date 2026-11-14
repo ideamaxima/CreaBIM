@@ -20,6 +20,7 @@ Issue and pull request numbers refer to the upstream repository.
   aside); the Sets window says so in red as you type.
 
 ### Added
+- Drawn shapes take **holes**: *Cut a hole* in Properties, then a rectangle drawn on the shape cuts a hole inside it or bites it across its edge (splitting it if it cuts through); holes are left out of the area, edited with Tab and removed in Properties. Their **area and perimeter** can be written on the drawing with a switch beside each: a label that follows the shape, moves freely and can be written by hand in its Properties.
 - A drawn rectangle stays a rectangle: its corner grips resize it (the opposite corner stays, also when turned) and its side grips push a side; Width and Height are in Properties, and *Convert to polyline* frees its corners.
 - On dark paper, a drawn line's or shape's own colour, a fill's colour and a hatch in its own colour show as they are; lines in the drawing's ink still turn light.
 - Line patterns show on screen as they print: Dotted shows dots, Centre and Dash-dot their long and short dashes (on drawn lines, rectangles and overrides of a view).

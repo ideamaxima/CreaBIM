@@ -9,11 +9,32 @@ use creabim_core::Terminator;
 use eframe::egui::{self, Color32, Stroke};
 use glam::DVec2;
 
+/// What the shape's fields ask the app to do beyond editing it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ShapeAsk {
+    None,
+    /// Arm the Rectangle tool to cut a hole in it.
+    CutHole,
+    /// Put its area (`true`: perimeter) on the drawing, or take it off.
+    Label {
+        perimeter: bool,
+        on: bool,
+    },
+}
+
 /// A selected polyline's fields in Properties; returns the edit's name
-/// when one changed. `patterns` are the fill patterns it can take.
-pub fn fields(ui: &mut egui::Ui, l: &mut DraftPolyline, patterns: &[String]) -> &'static str {
+/// when one changed, and what else it asks. `patterns` are the fill
+/// patterns it can take, `shown` whether its area and perimeter are on
+/// the drawing.
+pub fn fields(
+    ui: &mut egui::Ui,
+    l: &mut DraftPolyline,
+    patterns: &[String],
+    shown: [bool; 2],
+) -> (&'static str, ShapeAsk) {
     use crate::app::stylesui::colour_pick;
     let mut label = "";
+    let mut ask = ShapeAsk::None;
     if let Some((mut w, mut h)) = l.size() {
         // a rectangle: its size, its first corner staying put
         let mut changed = false;
@@ -45,15 +66,75 @@ pub fn fields(ui: &mut egui::Ui, l: &mut DraftPolyline, patterns: &[String]) -> 
             }
         });
     }
-    // the area is a reading of the shape: there always, off when open
+    // the area is a reading of the shape: there always, off when open;
+    // the switch beside it writes it on the drawing
+    let closed = l.area().is_some();
+    let mut show = shown;
     crate::props::row(ui, "Area", |ui| {
-        ui.add_enabled(
-            l.area().is_some(),
-            egui::Label::new(l.area().map_or("—".into(), crate::units::area)),
-        )
+        ui.horizontal(|ui| {
+            ui.add_enabled(
+                closed,
+                egui::Label::new(l.area().map_or("—".into(), crate::units::area)),
+            );
+            if ui
+                .add_enabled(closed, egui::Checkbox::without_text(&mut show[0]))
+                .on_hover_text("Write it on the drawing, as a label that follows the shape")
+                .changed()
+            {
+                ask = ShapeAsk::Label {
+                    perimeter: false,
+                    on: show[0],
+                };
+            }
+        });
     });
     let name = if l.closed { "Perimeter" } else { "Length" };
-    crate::props::row(ui, name, |ui| ui.label(crate::units::len(l.length())));
+    crate::props::row(ui, name, |ui| {
+        ui.horizontal(|ui| {
+            ui.label(crate::units::len(l.length()));
+            if ui
+                .add_enabled(closed, egui::Checkbox::without_text(&mut show[1]))
+                .on_hover_text("Write it on the drawing, as a label that follows the shape")
+                .changed()
+            {
+                ask = ShapeAsk::Label {
+                    perimeter: true,
+                    on: show[1],
+                };
+            }
+        });
+    });
+    // holes: cut one with the Rectangle tool, take one away here
+    if closed {
+        crate::props::row(ui, "Holes", |ui| {
+            ui.horizontal(|ui| {
+                ui.label(l.holes.len().to_string());
+                if ui
+                    .button("Cut a hole")
+                    .on_hover_text("Then draw a rectangle on it: inside, a hole; across its edge, it is bitten")
+                    .clicked()
+                {
+                    ask = ShapeAsk::CutHole;
+                }
+            });
+        });
+        let mut gone = None;
+        for k in 0..l.holes.len() {
+            crate::props::row(ui, "", |ui| {
+                if ui
+                    .button(format!("✕ Hole {}", k + 1))
+                    .on_hover_text("Fill this hole back in")
+                    .clicked()
+                {
+                    gone = Some(k);
+                }
+            });
+        }
+        if let Some(k) = gone {
+            l.holes.remove(k);
+            label = "Remove hole";
+        }
+    }
     if l.is_rectangle() {
         // in the fields' column, under its readings
         crate::props::row(ui, "", |ui| {
@@ -182,7 +263,7 @@ pub fn fields(ui: &mut egui::Ui, l: &mut DraftPolyline, patterns: &[String]) -> 
         egui::RichText::new("Drawn shapes show in this view only, never in 3D, schedules or IFC.")
             .weak(),
     );
-    label
+    (label, ask)
 }
 
 /// Draw a shape's fill in the working view: its colour at its
@@ -289,4 +370,40 @@ pub fn rect_drag(
         Some((w, h)) if w > 1e-3 && h > 1e-3 => Ok(()),
         _ => Err("a rectangle needs a width and a height".into()),
     }
+}
+
+/// A shape's area or perimeter tag's text in Properties: what it reads,
+/// to be written over by hand; *Measure again* puts the measure back.
+pub fn tag_text_field(
+    ui: &mut egui::Ui,
+    text: &mut Option<String>,
+    measured: &str,
+) -> &'static str {
+    let mut label = "";
+    let mut t = text.clone().unwrap_or_else(|| measured.to_string());
+    crate::props::row(ui, "Text", |ui| {
+        if ui
+            .text_edit_singleline(&mut t)
+            .on_hover_text(
+                "Written by hand it stays as you write it; the shape no longer updates it",
+            )
+            .changed()
+        {
+            *text = Some(t.clone());
+            label = "Label text";
+        }
+    });
+    if text.is_some() {
+        crate::props::row(ui, "", |ui| {
+            if ui
+                .button("Measure again")
+                .on_hover_text(format!("Back to the measure: {measured}"))
+                .clicked()
+            {
+                *text = None;
+                label = "Label measured";
+            }
+        });
+    }
+    label
 }

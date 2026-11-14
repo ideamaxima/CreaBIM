@@ -46,17 +46,18 @@ pub fn polyline_items(
 ) -> Vec<PlanItem> {
     let mut out = vec![];
     let filled = l.filled();
+    let poly = l.fill_polygon();
     if filled {
         let f = &l.fill;
         let lines = match (pattern, l.points.first()) {
             (Some(p), Some(o)) if mm > 0.0 => {
-                shape_pattern_lines(p, &l.points, 1.0 / mm, *o, f.rotation, f.scale)
+                shape_pattern_lines(p, &poly, 1.0 / mm, *o, f.rotation, f.scale)
             }
             _ => vec![],
         };
         out.push(PlanItem::Hatched {
             id,
-            points: l.points.clone(),
+            points: poly,
             rgb: f.colour.map(|c| c.0),
             alpha: 1.0 - f.transparency.clamp(0.0, 1.0),
             lines,
@@ -70,10 +71,30 @@ pub fn polyline_items(
     } else {
         Pen::Guide
     };
-    for (a, b) in l.sides() {
+    for (a, b) in l.sides().into_iter().chain(l.hole_sides()) {
         out.push(PlanItem::Line { id, pen, a, b });
     }
     out
+}
+
+/// What a tag on shape `l` reads: each of `fields` (its area, its
+/// perimeter) on its own line, in the project's units.
+pub fn reading(
+    model: &creabim_core::Model,
+    l: &DraftPolyline,
+    fields: &[creabim_core::room::RoomField],
+) -> String {
+    use creabim_core::room::RoomField;
+    let units = model.units();
+    fields
+        .iter()
+        .filter_map(|f| match f {
+            RoomField::Area => l.area().map(|a| units.area(a)),
+            RoomField::Perimeter => Some(units.dimension(l.length())),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[cfg(test)]

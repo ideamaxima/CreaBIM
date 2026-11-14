@@ -457,7 +457,7 @@ pub fn transformed(model: &Model, e: &Element, t: &Xform) -> Option<Element> {
         }
         ElementKind::DraftPolyline(l) => {
             let frame = crate::DrawingFrame::of(model, l.view)?;
-            for p in &mut l.points {
+            for p in l.points.iter_mut().chain(l.holes.iter_mut().flatten()) {
                 *p = frame.to_drawing(t.point3(frame.to_model(*p)));
             }
             l.validate().ok()?;

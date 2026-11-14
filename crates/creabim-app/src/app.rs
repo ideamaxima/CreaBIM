@@ -8794,6 +8794,7 @@ impl CreaBimApp {
         let mut label = "";
         let mut extrude_sketch = false;
         let mut draw_hole = false;
+        let mut shape_ask = crate::draw::polyline::ShapeAsk::None;
         let num = |ui: &mut egui::Ui, text: &str, v: &mut f64, lo: f64, hi: f64| -> bool {
             crate::props::row(ui, text, |ui| {
                 crate::props::fill(ui, crate::units::drag(v).range(lo..=hi)).changed()
@@ -9666,6 +9667,18 @@ impl CreaBimApp {
                     if ui.button("Select the tagged element").clicked() {
                         self.selection.only(t.host);
                     }
+                    // a drawn shape's area or perimeter: its text can be
+                    // written by hand, and measured again
+                    if let Some(ElementKind::DraftPolyline(l)) =
+                        self.doc.model().get(t.host).map(|e| &e.kind)
+                    {
+                        let measured =
+                            creabim_geom::draw::polyline::reading(self.doc.model(), l, &t.fields);
+                        let l2 = crate::draw::polyline::tag_text_field(ui, &mut t.text, &measured);
+                        if !l2.is_empty() {
+                            label = l2;
+                        }
+                    }
                     if matches!(
                         self.doc.model().get(t.host).map(|e| &e.kind),
                         Some(ElementKind::Room(_))
@@ -9999,7 +10012,9 @@ impl CreaBimApp {
                     label = crate::draw::line::line_fields(ui, l);
                 }
                 ElementKind::DraftPolyline(l) => {
-                    label = crate::draw::polyline::fields(ui, l, &pattern_names);
+                    let shown = self.shape_labels_shown(id);
+                    (label, shape_ask) =
+                        crate::draw::polyline::fields(ui, l, &pattern_names, shown);
                 }
                 // a set has only its name
                 ElementKind::Set(_) | ElementKind::SetFolder(_) | ElementKind::Combination(_) => {}
@@ -10226,6 +10241,7 @@ impl CreaBimApp {
                 self.status = o.hint();
             }
         }
+        self.shape_ask(id, shape_ask);
         if draw_hole {
             self.plan.cancel();
             self.plan.tool = Tool::Select;
