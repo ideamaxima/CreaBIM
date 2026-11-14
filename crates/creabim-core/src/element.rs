@@ -149,6 +149,7 @@ impl Element {
             ElementKind::Cut(c) => vec![c.target, c.cutter],
             ElementKind::Join(j) => vec![j.a, j.b],
             ElementKind::Detail(d) => vec![d.view],
+            ElementKind::DraftLine(l) => vec![l.view],
             ElementKind::Guide(g) => g.level.into_iter().collect(),
             ElementKind::Railing(r) => std::iter::once(r.level)
                 .chain(r.stair.map(|s| s.stair))
@@ -200,6 +201,7 @@ impl Element {
             // drawing rules and drafting, not building elements
             ElementKind::Join(_) => "Join",
             ElementKind::Detail(_) => "DetailItem",
+            ElementKind::DraftLine(_) => "DraftLine",
             ElementKind::Guide(_) => "Guide",
             ElementKind::Column(_) => "IfcColumn",
             ElementKind::Beam(_) => "IfcBeam",
@@ -403,6 +405,7 @@ impl Element {
                 }
             }
             ElementKind::Detail(d) => d.validate(),
+            ElementKind::DraftLine(l) => l.validate(),
             ElementKind::Cut(c) => {
                 if c.target == c.cutter {
                     Err("an element can't cut itself".into())
@@ -498,6 +501,8 @@ pub enum ElementKind {
     Join(crate::joins::JoinRule),
     /// A detail component drawn in one view: a flashing, a membrane...
     Detail(crate::detail::DetailItem),
+    /// A line drawn in one view (the Draw tab).
+    DraftLine(crate::draw::DraftLine),
     /// A set the user made (a layer): elements of any category list it in
     /// their `sets`, and views can switch it off.
     Set(crate::sets::Set),
@@ -564,6 +569,7 @@ impl ElementKind {
             ElementKind::Ceiling(_) => "Ceiling",
             ElementKind::Join(_) => "Join",
             ElementKind::Detail(_) => "Detail",
+            ElementKind::DraftLine(_) => "DraftLine",
         }
     }
 }

@@ -131,6 +131,17 @@ impl Looks {
                     }
                 }
             }
+            // a drawn line's own pen, pattern and colour: over its
+            // category's style, under the view's overrides
+            if let ElementKind::DraftLine(dl) = &e.kind {
+                let mm = dl.weight.mm(w);
+                l.projection = Some(mm);
+                l.cut = Some(mm);
+                l.dashes = Some(dl.pattern.dashes());
+                if let Some(c) = dl.colour {
+                    l.colour = Some(c.0);
+                }
+            }
             // the view's overrides: its category's, then its own
             let ours = |o: &&styles::Override| match o.target {
                 Target::Category(c) => c == cat,

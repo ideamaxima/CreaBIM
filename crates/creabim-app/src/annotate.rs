@@ -1420,7 +1420,7 @@ pub fn style_ui(ui: &mut egui::Ui, s: &mut TextStyle) -> Option<&'static str> {
 }
 
 /// A terminator picker, with "Usual" for none.
-fn terminator_combo(
+pub(crate) fn terminator_combo(
     ui: &mut egui::Ui,
     salt: &str,
     text: &str,

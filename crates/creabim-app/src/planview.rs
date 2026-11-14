@@ -84,10 +84,12 @@ pub enum Tool {
     Callout,
     /// A detail component: flashing, membrane, insulation, blocking...
     Detail,
+    /// A line drawn in one view (Draw tab).
+    Line,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 41] = [
+    pub const ALL: [Tool; 42] = [
         Tool::Select,
         Tool::Wall,
         Tool::Door,
@@ -123,6 +125,7 @@ impl Tool {
         Tool::ArcLength,
         Tool::Note,
         Tool::Detail,
+        Tool::Line,
         Tool::SpotLevel,
         Tool::Sketch,
         Tool::Guide,
@@ -179,6 +182,7 @@ impl Tool {
             Tool::Ceiling => "Ceiling",
             Tool::Callout => "Callout",
             Tool::Detail => "Detail component",
+            Tool::Line => "Line",
         }
     }
 
@@ -223,6 +227,7 @@ impl Tool {
             Tool::Room => "Click inside walls for a room that follows them (3, Fill room), or draw its outline (1 Polygon, 2 Rectangle, 4 From sketch) where no walls close it off. Its name, number and finishes are in Properties.",
             Tool::RoomSeparator => "Click two points for a line that splits a room in two where there is no wall, such as between a kitchen and a dining room.",
             Tool::Callout => "On a plan or section, click two corners of a box round what to detail: it becomes a detail view at the scale in the top bar, numbered in a bubble on this view.",
+            Tool::Line => "Click two points for a line in this view. Type its length (Tab: angle) and press Enter; Shift keeps it square, Alt drops the snaps. Its pen, pattern, colour and end marks are in the top bar for the next line, in Properties for a selected one. Lines show in this view only.",
             Tool::Detail => "Pick what to draw in the top bar, then click its points; Enter, a double-click or a right-click finishes (the first point again closes a region). Esc keeps what is drawn. Detail components show in this view only.",
             Tool::Ceiling => "Click inside a room for a ceiling over it that follows its walls (3, Fill room), or draw its outline (1 Polygon, 2 Rectangle, 4 From sketch). Set its height and thickness in the top bar or Properties.",
         }
@@ -531,6 +536,8 @@ pub struct PlanState {
     /// What the Detail and Callout tools draw, and the Detail tool's
     /// points so far.
     pub details: crate::detailtool::DetailSettings,
+    /// The Line tool's view and the look of the next line.
+    pub line: crate::draw::line::LineTool,
     /// A view made in a pane that the app should open: a new detail view.
     pub want_view: Option<ElementId>,
     /// The Snap menu's Custom step being typed.
@@ -688,6 +695,7 @@ impl Default for PlanState {
             centre_lines: HashMap::new(),
             types: HashMap::new(),
             details: Default::default(),
+            line: Default::default(),
             want_view: None,
             step_prompt: None,
             temp: Default::default(),
@@ -1576,7 +1584,8 @@ pub fn show(
             | Tool::Railing
             | Tool::Footing
             | Tool::RoomSeparator
-    ) && matches!(kind, PaneKind::Plan { .. });
+    ) && matches!(kind, PaneKind::Plan { .. })
+        || tool == Tool::Line && matches!(kind, PaneKind::Plan { .. } | PaneKind::Section { .. });
     let mut tracker_enter = false;
     // the Guide tool takes a typed distance from its edge or point
     let guide_typing =
@@ -2298,6 +2307,10 @@ pub fn show(
             false,
         );
     }
+    // a line being drawn
+    if tool == Tool::Line && matches!(kind, PaneKind::Plan { .. } | PaneKind::Section { .. }) {
+        crate::draw::line::preview(&painter, &xf, state, view, hover_world, mm);
+    }
     // a callout's box or a detail component being drawn, and Enter to
     // finish the component
     if matches!(tool, Tool::Callout | Tool::Detail) {
@@ -2713,7 +2726,12 @@ pub fn show(
     }
 
     let mut error = None;
-    if let (true, Some(p), PaneKind::Plan { level }) = (tracker_enter, hover_world, kind) {
+    if let (true, Some(p), Tool::Line) = (tracker_enter, hover_world, tool) {
+        state.tracker.clear();
+        if let Err(e) = crate::draw::line::click(doc, view, p, state, selection) {
+            error = Some(e.to_string());
+        }
+    } else if let (true, Some(p), PaneKind::Plan { level }) = (tracker_enter, hover_world, kind) {
         // the Guide tool reads the typed distance itself
         if tool != Tool::Guide {
             state.tracker.clear();
@@ -2932,6 +2950,9 @@ pub fn show(
             }
             (PaneKind::Plan { .. } | PaneKind::Section { .. }, Tool::Detail) => {
                 crate::detailtool::detail_click(doc, view, p, raw, state, selection)
+            }
+            (PaneKind::Plan { .. } | PaneKind::Section { .. }, Tool::Line) => {
+                crate::draw::line::click(doc, view, p, state, selection)
             }
             (_, t) if crate::annotate::is_tool(t) => match &view_def {
                 Some(v) => crate::annotate::click(
@@ -3401,7 +3422,8 @@ fn plan_click(
         | Tool::SpotLevel
         | Tool::Sketch
         | Tool::Callout
-        | Tool::Detail => Ok(()),
+        | Tool::Detail
+        | Tool::Line => Ok(()),
         // a library profile placed at the click, pulled up (MU36)
         Tool::Extrusion if state.parts.extrusion_library.is_some() => {
             let name = state.parts.extrusion_library.clone().unwrap_or_default();
@@ -5547,10 +5569,16 @@ pub fn view_overrides(model: &creabim_core::Model, view: ElementId) -> HashMap<E
     let Some(ElementKind::View(v)) = model.get(view).map(|e| &e.kind) else {
         return out;
     };
+    let w = creabim_core::styles::view_weights(model, v);
+    // a drawn line's own pen, pattern and colour, under the overrides
+    let own = |e: &creabim_core::Element| match &e.kind {
+        ElementKind::DraftLine(l) if l.view == view => Some(crate::draw::line::own_look(l, &w)),
+        _ => None,
+    };
     if v.look.overrides.is_empty() {
+        out.extend(model.iter().filter_map(|e| own(e).map(|r| (e.id, r))));
         return out;
     }
-    let w = creabim_core::styles::view_weights(model, v);
     let cutters = creabim_core::visibility::cutters(model);
     for e in model.iter() {
         let Some(cat) = creabim_core::visibility::Category::of(e, &cutters) else {
@@ -5565,11 +5593,15 @@ pub fn view_overrides(model: &creabim_core::Model, view: ElementId) -> HashMap<E
                 Target::Element(id) => id == e.id,
             })
             .collect();
+        let base = own(e);
         if list.is_empty() {
+            if let Some(r) = base {
+                out.insert(e.id, r);
+            }
             continue;
         }
         list.sort_by_key(|o| matches!(o.target, Target::Element(_)));
-        let mut r = Ovr::default();
+        let mut r = base.unwrap_or_default();
         for o in list {
             if let Some(x) = o.weight {
                 r.proj = (x.mm(&w) / w.projection.max(1e-6)) as f32;

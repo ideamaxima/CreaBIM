@@ -19,6 +19,14 @@ Issue and pull request numbers refer to the upstream repository.
   aside); the Sets window says so in red as you type.
 
 ### Added
+- Draw tab: **Line**. Two clicks draw a line in the plan or section
+  clicked, shown in that view only (never in 3D, schedules or IFC). Type
+  its length (Tab: angle) and press Enter; Shift keeps it square, Alt
+  drops the snaps, and other lines snap to its ends. The top bar sets the
+  next line's pen, pattern, colour and end marks (ticks, arrows, dots…);
+  Properties changes a selected one's points, length, angle and look, and
+  its ends drag. Lines have their own category, *Lines*, so views can hide
+  them or change how they draw, and they go in sets like anything else.
 - Guides at a typed distance: after clicking an edge or a point, type how
   far and press Enter; the pointer gives the side, in plans and in 3D on
   the level. Right-click a guide to delete all guides on its level.

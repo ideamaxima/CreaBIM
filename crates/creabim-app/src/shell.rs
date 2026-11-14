@@ -176,6 +176,7 @@ pub(crate) fn tool_icon(t: Tool) -> &'static str {
         Tool::Ceiling => "ceiling",
         Tool::Callout => "callout",
         Tool::Detail => "detail-component",
+        Tool::Line => "slash",
     }
 }
 
@@ -212,6 +213,7 @@ fn tool_group(t: Tool) -> u8 {
         | Tool::ArcLength
         | Tool::Note
         | Tool::Detail
+        | Tool::Line
         | Tool::SpotLevel => 3,
         Tool::Sketch | Tool::Guide | Tool::Grid | Tool::Level => 4,
     }
@@ -2849,6 +2851,9 @@ impl CreaBimApp {
                     o
                 }),
         );
+        if tool == Tool::Line {
+            options.extend(crate::draw::line::options(&self.plan.line.look));
+        }
         if tool == Tool::Detail {
             options.push(seg(creabim_core::DetailKind::ALL
                 .iter()

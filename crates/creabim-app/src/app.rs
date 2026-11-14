@@ -72,7 +72,7 @@ mod setsui;
 #[path = "shell.rs"]
 pub(crate) mod shell;
 #[path = "stylesui.rs"]
-mod stylesui;
+pub(crate) mod stylesui;
 #[path = "typepreview.rs"]
 mod typepreview;
 #[path = "typesui.rs"]
@@ -8787,6 +8787,7 @@ impl CreaBimApp {
             match &e.kind {
                 ElementKind::Reference(_) => "Reference",
                 ElementKind::Note(_) => "Note",
+                ElementKind::DraftLine(_) => "Line",
                 ElementKind::PaperMark(m) => match m.kind {
                     creabim_core::PaperMarkKind::NorthArrow { .. } => "North arrow",
                     creabim_core::PaperMarkKind::ScaleBar { .. } => "Scale bar",
@@ -9961,6 +9962,9 @@ impl CreaBimApp {
                 }
                 ElementKind::Detail(d) => {
                     label = crate::detailtool::detail_fields(ui, d);
+                }
+                ElementKind::DraftLine(l) => {
+                    label = crate::draw::line::line_fields(ui, l);
                 }
                 // a set has only its name
                 ElementKind::Set(_) | ElementKind::SetFolder(_) | ElementKind::Combination(_) => {}
@@ -11815,6 +11819,7 @@ pub(crate) fn kind_word(k: &ElementKind) -> &'static str {
         ElementKind::RoomSeparator(_) => "room separator",
         ElementKind::Join(_) => "junction rule",
         ElementKind::Detail(_) => "detail component",
+        ElementKind::DraftLine(_) => "line",
         ElementKind::Set(_) => "set",
         ElementKind::SetFolder(_) => "set folder",
         ElementKind::Combination(_) => "combination",

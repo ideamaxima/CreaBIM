@@ -178,6 +178,10 @@ pub enum HandleKind {
     BeamWidth,
     /// A detail component's width across its path, both sides at once.
     DetailWidth,
+    /// A drawn line's start or end, on its view's paper.
+    LineEnd {
+        end: bool,
+    },
     /// A repeating detail's unit length, at the end of its first unit.
     DetailSpacing,
     /// A plant's canopy, at the edge of its crown.
@@ -217,6 +221,7 @@ impl HandleKind {
             self,
             HandleKind::WallEnd { .. }
                 | HandleKind::GridEnd { .. }
+                | HandleKind::LineEnd { .. }
                 | HandleKind::Member { free: true, .. }
                 | HandleKind::ViewEnd { .. }
                 | HandleKind::CropMove
@@ -297,6 +302,8 @@ impl HandleKind {
             HandleKind::OpeningHead => "Head: raise",
             HandleKind::OpeningSill => "Sill: raise",
             HandleKind::GridEnd { .. } => "Grid end",
+            HandleKind::LineEnd { end: false } => "Start",
+            HandleKind::LineEnd { end: true } => "End",
             HandleKind::Face(_) => "Face: push",
             HandleKind::Member { .. } => "Point",
             HandleKind::ViewEnd { .. } => "Line end",
@@ -446,6 +453,7 @@ pub fn pick_allows(k: &HandleKind) -> bool {
                 | K::MeshVertex(_)
                 | K::WallEnd { .. }
                 | K::GridEnd { .. }
+                | K::LineEnd { .. }
                 | K::Member { .. }
                 | K::MeshMove
                 | K::Rotate
@@ -998,6 +1006,26 @@ pub fn handles(model: &Model, id: ElementId, face: Option<usize>) -> Vec<Handle>
             out
         }
         ElementKind::Detail(d) => detail_grips(model, d),
+        ElementKind::DraftLine(l) => {
+            let Some(frame) = creabim_core::DrawingFrame::of(model, l.view) else {
+                return vec![];
+            };
+            [(false, l.a), (true, l.b)]
+                .into_iter()
+                .map(|(end, p)| {
+                    let at = frame.to_model(p);
+                    Handle {
+                        kind: HandleKind::LineEnd { end },
+                        at,
+                        constraint: Constraint::Plane {
+                            point: at,
+                            normal: frame.normal(),
+                        },
+                        nudge: 0.0,
+                    }
+                })
+                .collect()
+        }
         // a reference: its middle moves it, its corners scale it, the
         // turn grip above its top turns it; none when it is locked
         ElementKind::Reference(r) if !r.locked => {
@@ -1598,6 +1626,18 @@ pub fn apply(
             let dz = round(d.z, step).clamp(-o.sill, o.height - 0.2);
             o.sill += dz;
             o.height -= dz;
+        }
+        (ElementKind::DraftLine(l), HandleKind::LineEnd { end }) => {
+            let frame = creabim_core::DrawingFrame::of(model, l.view).ok_or("no view")?;
+            let p = frame.to_drawing(now);
+            if end {
+                l.b = p;
+            } else {
+                l.a = p;
+            }
+            if l.length() < 1e-3 {
+                return Err("a line needs two different points".into());
+            }
         }
         (ElementKind::Grid(g), HandleKind::GridEnd { end }) => {
             if end {
@@ -3423,6 +3463,7 @@ pub fn interact(
     // drafting is on its own view's paper only
     let elsewhere = match doc.model().get(id).map(|e| &e.kind) {
         Some(ElementKind::Detail(d)) => Some(d.view) != input.view,
+        Some(ElementKind::DraftLine(l)) => Some(l.view) != input.view,
         Some(ElementKind::View(v)) => v.callout.is_some_and(|c| Some(c.parent) != input.view),
         // a reference has grips only where it is shown: in its views, or
         // in 3D when it shows there (MU38: a profile's trace had grips in
