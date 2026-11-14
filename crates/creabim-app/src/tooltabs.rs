@@ -106,7 +106,7 @@ pub fn entries(tab: usize) -> Vec<Entry> {
             soon("Freehand", "pencil"),
             soon("Spline", "spline"),
             Sep,
-            soon("Point", "crosshair"),
+            soon("Point", "point-mark"),
         ],
         2 => vec![
             T(Tool::Dimension),

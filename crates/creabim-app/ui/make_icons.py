@@ -20,6 +20,8 @@ names+="""chevrons-down-up chevrons-up-down""".split()
 names+="""waypoints loader-circle hexagon""".split()
 # snap markers, drawn like the markers in the views (not from Lucide)
 CUSTOM={
+ # the Draw tab's Point: Lucide's asterisk, drawn larger (corner to corner)
+ "point-mark": '<path d="M12 3v18" /> <path d="M19.79 7.5 4.21 16.5" /> <path d="M4.21 7.5 19.79 16.5" />',
  "snap-endpoint": '<rect x="6" y="6" width="12" height="12" />',
  "snap-midpoint": '<path d="M12 5.5 19.5 18.5h-15z" />',
  "snap-intersection": '<path d="m6 6 12 12M18 6 6 18" />',
