@@ -1133,7 +1133,8 @@ impl CreaBimApp {
                         &format!("{name} › {label} › "),
                         &mut out,
                     ),
-                    Entry::Tool(_) | Entry::Sep => {}
+                    // a tool still to come is not found by typing
+                    Entry::Tool(_) | Entry::Soon { .. } | Entry::Sep => {}
                 }
             }
         }
@@ -1421,6 +1422,10 @@ impl CreaBimApp {
                 .find(|e| e.id.0.to_string() == arg)
                 .map(|e| e.id)
         };
+        if head == "draw.soon" {
+            self.status = format!("{arg}: not made yet. It comes with the 2D drawing tools.");
+            return;
+        }
         if self.area_action(head, arg) {
             return;
         }
@@ -3212,6 +3217,10 @@ impl CreaBimApp {
                 } => json!({
                     "kind": "menu", "key": key, "label": label, "hint": hint, "icon": icon,
                     "open": self.popup_key().as_deref() == Some(key),
+                }),
+                Entry::Soon { label, icon } => json!({
+                    "kind": "act", "id": format!("draw.soon:{label}"), "label": label,
+                    "hint": "coming soon", "icon": icon, "active": false, "off": true,
                 }),
                 Entry::Sep => json!({"kind": "sep"}),
             });
