@@ -42,34 +42,40 @@ impl Reading {
         }
     }
 
-    /// The figures as text: in a plan ΔX ΔY, in a section along and
+    /// The figures, one each: in a plan ΔX ΔY, in a section along and
     /// height, in 3D ΔX ΔY ΔZ.
-    pub fn text(&self, kind: PaneKind) -> String {
+    pub fn parts(&self, kind: PaneKind) -> Vec<String> {
         let l = crate::units::len;
         let ab = |x: f64| l(x.abs());
+        let mut v = vec![format!("Distance {}", l(self.dist))];
         match kind {
-            PaneKind::Section { .. } => format!(
-                "Distance {}   Along {}   Height {}   Angle {:.1}°",
-                l(self.dist),
-                ab(self.d.x),
-                ab(self.d.y),
-                self.angle
-            ),
-            PaneKind::Axonometric => format!(
-                "Distance {}   ΔX {}   ΔY {}   ΔZ {}",
-                l(self.dist),
-                ab(self.d.x),
-                ab(self.d.y),
-                ab(self.d.z)
-            ),
-            _ => format!(
-                "Distance {}   ΔX {}   ΔY {}   Angle {:.1}°",
-                l(self.dist),
-                ab(self.d.x),
-                ab(self.d.y),
-                self.angle
-            ),
+            PaneKind::Section { .. } => {
+                v.push(format!("Along {}", ab(self.d.x)));
+                v.push(format!("Height {}", ab(self.d.y)));
+                v.push(format!("Angle {:.1}°", self.angle));
+            }
+            PaneKind::Axonometric => {
+                v.push(format!("ΔX {}", ab(self.d.x)));
+                v.push(format!("ΔY {}", ab(self.d.y)));
+                v.push(format!("ΔZ {}", ab(self.d.z)));
+            }
+            _ => {
+                v.push(format!("ΔX {}", ab(self.d.x)));
+                v.push(format!("ΔY {}", ab(self.d.y)));
+                v.push(format!("Angle {:.1}°", self.angle));
+            }
         }
+        v
+    }
+
+    /// The figures in a row, for the status bar.
+    pub fn text(&self, kind: PaneKind) -> String {
+        self.parts(kind).join("   ")
+    }
+
+    /// The figures one per line, for the pill by the pointer.
+    pub fn lines(&self, kind: PaneKind) -> String {
+        self.parts(kind).join("\n")
     }
 }
 
@@ -99,7 +105,7 @@ pub fn click(state: &mut PlanState, view: creabim_core::ElementId, kind: PaneKin
 }
 
 /// A click at model point `p` in a 3D view.
-pub fn click_3d(state: &mut PlanState, view: creabim_core::ElementId, p: Option<DVec3>) {
+pub fn click_3d(state: &mut PlanState, view: Option<creabim_core::ElementId>, p: Option<DVec3>) {
     let Some(p) = p else {
         state.status = Some("Click on the model: a corner, an edge or a face.".into());
         return;
@@ -107,7 +113,7 @@ pub fn click_3d(state: &mut PlanState, view: creabim_core::ElementId, p: Option<
     let first = state
         .measure
         .first_3d
-        .filter(|_| state.measure.view == Some(view));
+        .filter(|_| state.measure.view == view);
     match first {
         Some(a) if a.distance(p) > MIN => {
             state.measure.clear();
@@ -120,9 +126,70 @@ pub fn click_3d(state: &mut PlanState, view: creabim_core::ElementId, p: Option<
         Some(_) => {}
         None => {
             state.measure.first_3d = Some(p);
-            state.measure.view = Some(view);
+            state.measure.view = view;
             state.status = Some("Click the second point. Shift keeps it along an axis.".into());
         }
+    }
+}
+
+/// The model point taken in 3D from what is under the pointer: the snap,
+/// else the face's point; with Shift held to an axis from the first point.
+pub fn point_3d(
+    state: &PlanState,
+    view: Option<creabim_core::ElementId>,
+    under: &crate::align3d::Under,
+    shift: bool,
+) -> Option<DVec3> {
+    let p = under
+        .snap
+        .map(|s| s.p)
+        .or_else(|| under.face.as_ref().map(|f| f.face.point))?;
+    match state
+        .measure
+        .first_3d
+        .filter(|_| state.measure.view == view)
+    {
+        Some(a) if shift => Some(square_3d(a, p)),
+        _ => Some(p),
+    }
+}
+
+/// The measure in a 3D view or window, drawn with `project`; a click
+/// takes the point. `view` is none for the 3D window.
+#[allow(clippy::too_many_arguments)]
+pub fn in_3d(
+    ui: &egui::Ui,
+    response: &egui::Response,
+    painter: &egui::Painter,
+    project: &dyn Fn(DVec3) -> Option<Pos2>,
+    state: &mut PlanState,
+    view: Option<creabim_core::ElementId>,
+    under: &crate::align3d::Under,
+    shift: bool,
+) {
+    let here = point_3d(state, view, under, shift);
+    if let Some(p) = here.and_then(project) {
+        painter.circle_stroke(p, 5.0, Stroke::new(1.5, crate::theme::interaction()));
+    }
+    if let Some(a) = state
+        .measure
+        .first_3d
+        .filter(|_| state.measure.view == view)
+    {
+        if let Some(sa) = project(a) {
+            let b = here.and_then(|b| project(b).map(|sb| (sb, Reading::of(a, b))));
+            preview(
+                ui,
+                painter,
+                sa,
+                b,
+                PaneKind::Axonometric,
+                response.hover_pos(),
+            );
+        }
+    }
+    if response.clicked() {
+        click_3d(state, view, here);
     }
 }
 
@@ -163,7 +230,7 @@ pub fn preview(
     painter.circle_filled(b, 3.0, ink);
     if let Some(at) = at {
         let look = crate::handles::PillLook::of(&crate::theme::Palette::of(ui.ctx()));
-        crate::handles::plain_pill(painter, at + Vec2::new(16.0, 18.0), &r.text(kind), &look);
+        crate::handles::plain_pill(painter, at + Vec2::new(16.0, 18.0), &r.lines(kind), &look);
     }
 }
 
@@ -219,9 +286,9 @@ mod tests {
     fn three_d_measures_and_shift_holds_an_axis() {
         let mut state = PlanState::default();
         let view = creabim_core::ElementId::new();
-        click_3d(&mut state, view, Some(DVec3::ZERO));
+        click_3d(&mut state, Some(view), Some(DVec3::ZERO));
         assert!(state.has_input());
-        click_3d(&mut state, view, Some(DVec3::new(0.0, 0.0, 3.0)));
+        click_3d(&mut state, Some(view), Some(DVec3::new(0.0, 0.0, 3.0)));
         assert!(!state.has_input());
         assert!(state.status.as_deref().unwrap_or("").contains("ΔZ"));
         let p = square_3d(DVec3::ZERO, DVec3::new(0.2, 5.0, 0.1));

@@ -1408,15 +1408,9 @@ fn show_view(
             };
             if let (Some(fs), Tool::Measure) = (&fs, tool) {
                 let project = |m: DVec3| Some(xf.to_screen(fs.0.project(m).truncate()));
-                measure_3d_preview(
-                    ui,
-                    &painter,
-                    &project,
-                    state,
-                    view,
-                    &under,
-                    shift,
-                    response.hover_pos(),
+                let v = Some(view);
+                crate::draw::measure::in_3d(
+                    ui, &response, &painter, &project, state, v, &under, shift,
                 );
             } else if let Some(fs) = &fs {
                 let project = |m: DVec3| Some(xf.to_screen(fs.0.project(m).truncate()));
@@ -3022,12 +3016,7 @@ fn show_view(
                 crate::draw::measure::click(state, view, kind, p);
                 Ok(())
             }
-            (PaneKind::Axonometric, Tool::Measure) => {
-                let under = align_under.unwrap_or_default();
-                let p = measure_point(state, view, &under, shift);
-                crate::draw::measure::click_3d(state, view, p);
-                Ok(())
-            }
+            (PaneKind::Axonometric, Tool::Measure) => Ok(()),
             (_, t) if crate::annotate::is_tool(t) => match &view_def {
                 Some(v) => crate::annotate::click(
                     doc,
@@ -3674,57 +3663,6 @@ fn axo_frame_snaps(
 /// What the Align tool takes under pointer `p` of 3D view `view`: the
 /// face of what the pre-selection reads there (Tab may have moved it), an
 /// object snap, and the lowest level for empty space.
-/// The model point the Measure tool takes in 3D: the snap under the
-/// pointer, else the face's point; with Shift held to an axis from the
-/// first point.
-fn measure_point(
-    state: &PlanState,
-    view: ElementId,
-    under: &crate::align3d::Under,
-    shift: bool,
-) -> Option<DVec3> {
-    let p = under
-        .snap
-        .map(|s| s.p)
-        .or_else(|| under.face.as_ref().map(|f| f.face.point))?;
-    match state
-        .measure
-        .first_3d
-        .filter(|_| state.measure.view == Some(view))
-    {
-        Some(a) if shift => Some(crate::draw::measure::square_3d(a, p)),
-        _ => Some(p),
-    }
-}
-
-/// The 3D measure in progress, drawn with `project`.
-#[allow(clippy::too_many_arguments)]
-fn measure_3d_preview(
-    ui: &egui::Ui,
-    painter: &egui::Painter,
-    project: &dyn Fn(DVec3) -> Option<Pos2>,
-    state: &PlanState,
-    view: ElementId,
-    under: &crate::align3d::Under,
-    shift: bool,
-    at: Option<Pos2>,
-) {
-    let here = measure_point(state, view, under, shift);
-    if let Some(p) = here.and_then(project) {
-        painter.circle_stroke(p, 5.0, Stroke::new(1.5, crate::theme::interaction()));
-    }
-    let Some(a) = state
-        .measure
-        .first_3d
-        .filter(|_| state.measure.view == Some(view))
-    else {
-        return;
-    };
-    let Some(sa) = project(a) else { return };
-    let b = here.and_then(|b| project(b).map(|sb| (sb, crate::draw::measure::Reading::of(a, b))));
-    crate::draw::measure::preview(ui, painter, sa, b, PaneKind::Axonometric, at);
-}
-
 fn axo_align_under(
     state: &mut PlanState,
     doc: &Document,

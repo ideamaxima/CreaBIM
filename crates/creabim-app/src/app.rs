@@ -3638,7 +3638,8 @@ impl CreaBimApp {
             self.outline_3d(ui, &response, &painter, &project, &ray);
             return;
         }
-        if self.plan.tool == Tool::Align {
+        // (Measure takes its points as Align does)
+        if matches!(self.plan.tool, Tool::Align | Tool::Measure) {
             self.align_3d(ui, &response, &painter, &project, &ray);
             return;
         }
@@ -4236,8 +4237,9 @@ impl CreaBimApp {
     ) {
         // on a sloped or upright workplane, things turn on it to line up
         self.plan.align.workplane = self.workplane.as_ref().map(|w| w.0);
+        let measure = self.plan.tool == Tool::Measure;
         // the tool's hint, for 3D, once the pointer is here
-        if response.hovered() && self.plan.align.reference_3d.is_none() {
+        if response.hovered() && self.plan.align.reference_3d.is_none() && !measure {
             self.status = crate::align3d::hint(&self.plan.align);
         }
         let under = match response.hover_pos() {
@@ -4276,6 +4278,15 @@ impl CreaBimApp {
             }
             None => Default::default(),
         };
+        if measure {
+            let shift = ui.input(|i| i.modifiers.shift);
+            let plan = &mut self.plan;
+            crate::draw::measure::in_3d(ui, response, painter, project, plan, None, &under, shift);
+            if let Some(msg) = self.plan.status.take() {
+                self.status = msg;
+            }
+            return;
+        }
         crate::align3d::draw(painter, project, self.doc.model(), &self.plan.align, &under);
         if response.clicked() {
             if let Some(h) = self.plan.hover.as_mut() {
