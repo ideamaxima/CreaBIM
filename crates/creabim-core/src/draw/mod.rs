@@ -3,5 +3,7 @@
 //! building elements. One file per shape.
 
 pub mod line;
+pub mod polyline;
 
 pub use line::DraftLine;
+pub use polyline::{DraftPolyline, ShapeFill};

@@ -156,7 +156,7 @@ impl Category {
             ElementKind::Site(_) => Category::Site,
             ElementKind::Room(_) | ElementKind::RoomSeparator(_) => Category::Rooms,
             ElementKind::Ceiling(_) => Category::Ceilings,
-            ElementKind::DraftLine(_) => Category::Lines,
+            ElementKind::DraftLine(_) | ElementKind::DraftPolyline(_) => Category::Lines,
             _ => return None,
         })
     }

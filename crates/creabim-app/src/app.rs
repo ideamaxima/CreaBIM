@@ -2740,6 +2740,7 @@ impl CreaBimApp {
                         | PlanItem::Tint { .. }
                         | PlanItem::Room { .. }
                         | PlanItem::Shade { .. }
+                        | PlanItem::Hatched { .. }
                         | PlanItem::Image { .. } => {}
                     }
                 }
@@ -8814,6 +8815,8 @@ impl CreaBimApp {
                 ElementKind::Reference(_) => "Reference",
                 ElementKind::Note(_) => "Note",
                 ElementKind::DraftLine(_) => "Line",
+                ElementKind::DraftPolyline(l) if l.closed => "Closed polyline",
+                ElementKind::DraftPolyline(_) => "Polyline",
                 ElementKind::PaperMark(m) => match m.kind {
                     creabim_core::PaperMarkKind::NorthArrow { .. } => "North arrow",
                     creabim_core::PaperMarkKind::ScaleBar { .. } => "Scale bar",
@@ -8825,6 +8828,8 @@ impl CreaBimApp {
                 _ => "Settings",
             }
         };
+        // the fill patterns a drawn shape can take
+        let pattern_names = creabim_core::styles::active_pack(self.doc.model()).pattern_names();
         if self.prop_header(ui, "element", section, true, None) {
             match &mut edited.kind {
                 ElementKind::Level(l) => {
@@ -9991,6 +9996,9 @@ impl CreaBimApp {
                 }
                 ElementKind::DraftLine(l) => {
                     label = crate::draw::line::line_fields(ui, l);
+                }
+                ElementKind::DraftPolyline(l) => {
+                    label = crate::draw::polyline::fields(ui, l, &pattern_names);
                 }
                 // a set has only its name
                 ElementKind::Set(_) | ElementKind::SetFolder(_) | ElementKind::Combination(_) => {}
@@ -11848,6 +11856,7 @@ pub(crate) fn kind_word(k: &ElementKind) -> &'static str {
         ElementKind::Join(_) => "junction rule",
         ElementKind::Detail(_) => "detail component",
         ElementKind::DraftLine(_) => "line",
+        ElementKind::DraftPolyline(_) => "polyline",
         ElementKind::Set(_) => "set",
         ElementKind::SetFolder(_) => "set folder",
         ElementKind::Combination(_) => "combination",

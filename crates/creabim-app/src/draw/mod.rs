@@ -3,3 +3,5 @@
 
 pub mod line;
 pub mod measure;
+pub mod polyline;
+pub mod rectangle;

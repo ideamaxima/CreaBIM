@@ -151,6 +151,28 @@ pub fn draw(
     step: &str,
     look: &crate::handles::PillLook,
 ) {
+    let fields = [
+        ("Length", bare(len), ""),
+        ("Angle", format!("{angle:.1}"), "°"),
+    ];
+    draw_fields(painter, at, t, &fields, step, look);
+}
+
+/// A length as the tracker shows it: its number alone.
+pub fn bare_len(metres: f64) -> String {
+    bare(metres)
+}
+
+/// The tracker's pill with other fields: each its label, the value the
+/// pointer gives (shown while nothing is typed) and a mark after it.
+pub fn draw_fields(
+    painter: &Painter,
+    at: Pos2,
+    t: &Tracker,
+    fields: &[(&str, String, &str); 2],
+    step: &str,
+    look: &crate::handles::PillLook,
+) {
     let font = egui::FontId::proportional(11.5);
     let mut job = egui::text::LayoutJob::default();
     let fmt = |c: Color32, under: bool| egui::TextFormat {
@@ -163,44 +185,23 @@ pub fn draw(
         },
         ..Default::default()
     };
-    let len_text = if t.fields[0].is_empty() {
-        bare(len)
-    } else {
-        t.fields[0].clone()
-    };
-    let ang_text = if t.fields[1].is_empty() {
-        format!("{angle:.1}°")
-    } else {
-        format!("{}°", t.fields[1])
-    };
     let typed = |i: usize| !t.fields[i].is_empty();
     let on = |i: usize| t.typing() && t.active == i;
-    job.append("Length ", 0.0, fmt(look.text, false));
-    job.append(
-        &len_text,
-        0.0,
-        fmt(
-            if typed(0) || on(0) {
-                look.number
-            } else {
-                look.text
-            },
-            on(0),
-        ),
-    );
-    job.append("   Angle ", 0.0, fmt(look.text, false));
-    job.append(
-        &ang_text,
-        0.0,
-        fmt(
-            if typed(1) || on(1) {
-                look.number
-            } else {
-                look.text
-            },
-            on(1),
-        ),
-    );
+    for (i, (label, value, mark)) in fields.iter().enumerate() {
+        let gap = if i == 0 { "" } else { "   " };
+        job.append(&format!("{gap}{label} "), 0.0, fmt(look.text, false));
+        let text = if typed(i) {
+            format!("{}{mark}", t.fields[i])
+        } else {
+            format!("{value}{mark}")
+        };
+        let colour = if typed(i) || on(i) {
+            look.number
+        } else {
+            look.text
+        };
+        job.append(&text, 0.0, fmt(colour, on(i)));
+    }
     job.append(
         &format!("   Step {step}"),
         0.0,

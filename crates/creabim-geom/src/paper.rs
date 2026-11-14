@@ -230,6 +230,30 @@ pub fn draw_looks(canvas: &mut dyn Canvas, drawing: &PlanView, map: &PaperMap, l
                 hatch,
                 rgb,
             } => looks.fill(canvas, *id, points, *hatch, *rgb, map),
+            // a drawn shape's fill: paper has no see-through, so a
+            // transparent colour is washed toward white
+            PlanItem::Hatched {
+                points,
+                rgb,
+                alpha,
+                lines,
+                ink,
+                ..
+            } => {
+                if let Some(c) = rgb {
+                    let pts: Vec<DVec2> = points.iter().map(|p| to(*p)).collect();
+                    let a = alpha.clamp(0.0, 1.0);
+                    canvas.fill_rgb(&pts, c.map(|v| 1.0 - (1.0 - v) * a));
+                }
+                let s = Stroke::solid(looks.weights.hatch, 0.2);
+                for (a, b) in lines {
+                    let seg = [to(*a), to(*b)];
+                    match ink {
+                        Some(c) => canvas.line_rgb(&seg, s, *c),
+                        None => canvas.line(&seg, s),
+                    }
+                }
+            }
             PlanItem::Tint { points, rgb, .. }
             | PlanItem::Room {
                 points,

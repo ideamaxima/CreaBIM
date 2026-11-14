@@ -67,6 +67,7 @@ fn annotation(kind: &ElementKind) -> bool {
             | ElementKind::Note(_)
             | ElementKind::Detail(_)
             | ElementKind::DraftLine(_)
+            | ElementKind::DraftPolyline(_)
             | ElementKind::View(_)
             | ElementKind::Viewport(_)
     )

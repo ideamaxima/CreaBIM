@@ -150,6 +150,7 @@ impl Element {
             ElementKind::Join(j) => vec![j.a, j.b],
             ElementKind::Detail(d) => vec![d.view],
             ElementKind::DraftLine(l) => vec![l.view],
+            ElementKind::DraftPolyline(l) => vec![l.view],
             ElementKind::Guide(g) => g.level.into_iter().collect(),
             ElementKind::Railing(r) => std::iter::once(r.level)
                 .chain(r.stair.map(|s| s.stair))
@@ -202,6 +203,7 @@ impl Element {
             ElementKind::Join(_) => "Join",
             ElementKind::Detail(_) => "DetailItem",
             ElementKind::DraftLine(_) => "DraftLine",
+            ElementKind::DraftPolyline(_) => "DraftPolyline",
             ElementKind::Guide(_) => "Guide",
             ElementKind::Column(_) => "IfcColumn",
             ElementKind::Beam(_) => "IfcBeam",
@@ -406,6 +408,7 @@ impl Element {
             }
             ElementKind::Detail(d) => d.validate(),
             ElementKind::DraftLine(l) => l.validate(),
+            ElementKind::DraftPolyline(l) => l.validate(),
             ElementKind::Cut(c) => {
                 if c.target == c.cutter {
                     Err("an element can't cut itself".into())
@@ -503,6 +506,9 @@ pub enum ElementKind {
     Detail(crate::detail::DetailItem),
     /// A line drawn in one view (the Draw tab).
     DraftLine(crate::draw::DraftLine),
+    /// A polyline drawn in one view, open or closed and filled (the Draw
+    /// tab's Rectangle).
+    DraftPolyline(crate::draw::DraftPolyline),
     /// A set the user made (a layer): elements of any category list it in
     /// their `sets`, and views can switch it off.
     Set(crate::sets::Set),
@@ -570,6 +576,7 @@ impl ElementKind {
             ElementKind::Join(_) => "Join",
             ElementKind::Detail(_) => "Detail",
             ElementKind::DraftLine(_) => "DraftLine",
+            ElementKind::DraftPolyline(_) => "DraftPolyline",
         }
     }
 }

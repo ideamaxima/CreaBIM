@@ -25,6 +25,7 @@ mod handles;
 mod help;
 mod hoverpick;
 mod icons;
+mod linepattern;
 mod memberstool;
 mod modal;
 mod modguides;

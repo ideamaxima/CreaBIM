@@ -89,15 +89,26 @@ pub fn preview(
 /// How the working view draws line `l` with its own pen, pattern and
 /// colour, as a view's override for it would.
 pub fn own_look(l: &DraftLine, w: &creabim_core::LineWeights) -> crate::planview::Ovr {
-    let f = (l.weight.mm(w) / w.projection.max(1e-6)) as f32;
+    own_look_of(l.weight, &l.pattern, l.colour, w)
+}
+
+/// The same from a drawn shape's pen, pattern and colour.
+pub fn own_look_of(
+    weight: Weight,
+    pattern: &LinePattern,
+    colour: Option<creabim_core::styles::Rgb>,
+    w: &creabim_core::LineWeights,
+) -> crate::planview::Ovr {
+    let f = (weight.mm(w) / w.projection.max(1e-6)) as f32;
     crate::planview::Ovr {
-        colour: l.colour.map(|c| {
+        colour: colour.map(|c| {
             let [r, g, b] = c.0.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
             egui::Color32::from_rgb(r, g, b)
         }),
         proj: f.clamp(0.2, 6.0),
         cut: f.clamp(0.2, 6.0),
-        dashed: !matches!(l.pattern, LinePattern::Solid),
+        dashes: crate::linepattern::Dashes::from_pattern(pattern),
+        own_colour: colour.is_some(),
         ..Default::default()
     }
 }
@@ -154,7 +165,7 @@ pub fn line_fields(ui: &mut egui::Ui, l: &mut DraftLine) -> &'static str {
         start: l.start,
         end: l.end,
     };
-    if look_fields(ui, "line", &mut look) {
+    if look_fields(ui, "line", &mut look, true) {
         l.weight = look.weight;
         l.pattern = look.pattern;
         l.colour = look.colour;
@@ -173,7 +184,7 @@ pub fn line_fields(ui: &mut egui::Ui, l: &mut DraftLine) -> &'static str {
 
 /// Pen, pattern, colour and end marks, for a selected line or the next
 /// one. True when one changed.
-pub fn look_fields(ui: &mut egui::Ui, salt: &str, look: &mut LineLook) -> bool {
+pub fn look_fields(ui: &mut egui::Ui, salt: &str, look: &mut LineLook, ends: bool) -> bool {
     use crate::app::stylesui::{colour_pick, pattern_combo, weight_combo};
     let mut changed = false;
     // the pickers offer "As drawn": for a line that is its usual pen and
@@ -200,6 +211,10 @@ pub fn look_fields(ui: &mut egui::Ui, salt: &str, look: &mut LineLook) -> bool {
             "Its own colour; off follows the drawing's ink",
         );
     });
+    // a closed shape has no ends to mark
+    if !ends {
+        return changed;
+    }
     for (text, t, id) in [
         ("Start", &mut look.start, "start"),
         ("End", &mut look.end, "end"),
