@@ -153,6 +153,13 @@ pub(crate) fn colour_pick(ui: &mut egui::Ui, c: &mut Option<Rgb>, fill: bool, ho
     changed
 }
 
+/// A colour cell of the object styles' table: on one line, so the colour
+/// button showing up beside its tick never wraps under it and makes the
+/// row taller (todo 5, as the Levels window's Fit).
+fn colour_cell(ui: &mut egui::Ui, c: &mut Option<Rgb>, fill: bool, hover: &str) -> bool {
+    ui.horizontal(|ui| colour_pick(ui, c, fill, hover)).inner
+}
+
 fn name_combo(
     ui: &mut egui::Ui,
     salt: impl std::hash::Hash + std::fmt::Debug,
@@ -1031,20 +1038,16 @@ fn objects_page(ui: &mut egui::Ui, pack: &mut StylePack) -> bool {
                 ui.label(k);
                 weight_combo(ui, (k, "proj"), &mut s.projection_weight);
                 weight_combo(ui, (k, "cut"), &mut s.cut_weight);
-                crate::props::flow(ui, |ui| colour_pick(ui, &mut s.colour, false, "A line colour of its own"));
+                colour_cell(ui, &mut s.colour, false, "A line colour of its own");
                 pattern_combo(ui, (k, "pattern"), &mut s.pattern);
-                crate::props::flow(ui, |ui| {
-                    colour_pick(ui, &mut s.cut_fill, true, "A fill colour behind its cut hatch")
-                });
+                colour_cell(ui, &mut s.cut_fill, true, "A fill colour behind its cut hatch");
                 name_combo(ui, (k, "cut_pattern"), &names, &mut s.cut_pattern, "Material's");
-                crate::props::flow(ui, |ui| {
-                    colour_pick(
-                        ui,
-                        &mut s.surface_fill,
-                        true,
-                        "A fill for its surfaces seen from above: roofs in a roof plan, hard landscape areas",
-                    )
-                });
+                colour_cell(
+                    ui,
+                    &mut s.surface_fill,
+                    true,
+                    "A fill for its surfaces seen from above: roofs in a roof plan, hard landscape areas",
+                );
                 ui.end_row();
                 if s != before {
                     changed = true;
@@ -1434,6 +1437,35 @@ fn templates_page(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The height of a colour cell in a column `width` wide, off and on.
+    fn cell_heights(width: f32, cell: fn(&mut egui::Ui, &mut Option<Rgb>) -> bool) -> Vec<f32> {
+        let ctx = egui::Context::default();
+        let mut heights = vec![];
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            for mut c in [None, Some(Rgb([0.2; 3]))] {
+                let r = ui.allocate_ui(egui::vec2(width, 100.0), |ui| {
+                    cell(ui, &mut c);
+                });
+                heights.push(r.response.rect.height());
+            }
+        });
+        out.textures_delta.clear();
+        heights
+    }
+
+    /// Picking a colour must not make an object style's row taller (todo
+    /// 5): the cell keeps to one line however narrow its column.
+    #[test]
+    fn a_colour_cell_stays_on_one_line() {
+        let h = cell_heights(20.0, |ui, c| colour_cell(ui, c, false, ""));
+        assert!((h[0] - h[1]).abs() < 0.5, "{h:?}");
+        // as it was: the button wrapped under the tick
+        let wrapped = cell_heights(20.0, |ui, c| {
+            crate::props::flow(ui, |ui| colour_pick(ui, c, false, "")).inner
+        });
+        assert!(wrapped[1] > wrapped[0] + 0.5, "{wrapped:?}");
+    }
 
     #[test]
     fn a_shipped_pack_applies_and_undoes_in_one_step() {
