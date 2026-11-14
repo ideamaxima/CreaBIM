@@ -2785,7 +2785,7 @@ impl CreaBimApp {
         let mut edited = it.clone();
         let mut label = None;
         let colour_row = |ui: &mut egui::Ui, name: &str, c: &mut [f32; 3]| -> bool {
-            crate::props::row(ui, name, |ui| ui.color_edit_button_rgb(c)).changed()
+            crate::props::row(ui, name, |ui| crate::colourpick::srgb_button(ui, c)).changed()
         };
         match &mut edited {
             TitleItem::Text {

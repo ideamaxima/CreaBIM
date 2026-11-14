@@ -145,7 +145,7 @@ pub(crate) fn colour_pick(ui: &mut egui::Ui, c: &mut Option<Rgb>, fill: bool, ho
         // the picker rounds through its own colour space every frame: keep
         // what it gives back only when it was used
         let mut edit = *rgb;
-        if ui.color_edit_button_rgb(&mut edit).changed() {
+        if crate::colourpick::srgb_button(ui, &mut edit).changed() {
             *rgb = edit;
             changed = true;
         }

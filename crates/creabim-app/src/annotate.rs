@@ -1289,7 +1289,7 @@ pub fn look_ui(
             let h = ui.spacing().interact_size.y;
             ui.spacing_mut().interact_size.x = ui.available_width().max(40.0);
             ui.spacing_mut().interact_size.y = h;
-            if ui.color_edit_button_rgb(c).changed() {
+            if crate::colourpick::srgb_button(ui, c).changed() {
                 out = LookEdit::Changed("Annotation colour");
             }
         });
@@ -1355,7 +1355,7 @@ pub fn style_ui(ui: &mut egui::Ui, s: &mut TextStyle) -> Option<&'static str> {
             label = Some("Text colour");
         }
         if let Some(c) = &mut s.color {
-            if ui.color_edit_button_rgb(c).changed() {
+            if crate::colourpick::srgb_button(ui, c).changed() {
                 label = Some("Text colour");
             }
         }

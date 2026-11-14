@@ -10670,7 +10670,7 @@ fn paper_mark_fields(
                         label = Some("Revision cloud colour");
                     }
                     if let Some(c) = color {
-                        if ui.color_edit_button_rgb(c).changed() {
+                        if crate::colourpick::srgb_button(ui, c).changed() {
                             label = Some("Revision cloud colour");
                         }
                     }
@@ -10760,8 +10760,10 @@ fn paper_mark_fields(
                 | Some(creabim_core::titleblock::TitleItem::Shape { colour: c, .. }) => *c,
                 _ => [0.0; 3],
             };
-            if crate::props::row(ui, "One colour", |ui| ui.color_edit_button_rgb(&mut one))
-                .changed()
+            if crate::props::row(ui, "One colour", |ui| {
+                crate::colourpick::srgb_button(ui, &mut one)
+            })
+            .changed()
             {
                 for s in shapes.iter_mut() {
                     if let creabim_core::titleblock::TitleItem::Shape { colour, fill, .. } = s {
