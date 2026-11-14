@@ -509,6 +509,7 @@ impl CreaBimApp {
 
     fn load_model(&mut self, model: Model) {
         self.doc = Document::from_model(with_plan_views(model));
+        self.sets.reset_file_state();
         self.selection.clear();
         self.hidden.clear();
         self.hidden_rev += 1;

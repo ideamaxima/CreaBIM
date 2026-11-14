@@ -538,7 +538,8 @@ impl CreaBimApp {
         let mut items = vec![Item::new(format!("type.tool:{cat:?}:none"), "No type")
             .checked(now.is_none())
             .hint("Draw with the sizes in this bar")];
-        let all = types::types(model);
+        let mut all = types::types(model);
+        all.sort_by_cached_key(|(_, name, _)| name.to_lowercase());
         for (heading, c, curtain) in GROUPS {
             if c != cat {
                 continue;
@@ -628,7 +629,8 @@ impl CreaBimApp {
                 {
                     let first = types::types(self.doc.model())
                         .iter()
-                        .find(|(_, _, t)| t.category() == cat && !t.is_curtain())
+                        .filter(|(_, _, t)| t.category() == cat && !t.is_curtain())
+                        .min_by_key(|(_, name, _)| name.to_lowercase())
                         .map(|(id, _, _)| *id);
                     self.types.open = true;
                     self.types.current = first;
@@ -713,10 +715,11 @@ impl CreaBimApp {
         let Some(cat) = TypeCategory::of(&e.kind) else {
             return;
         };
-        let choices: Vec<(ElementId, String, bool)> = types::types_for(model, &e.kind)
+        let mut choices: Vec<(ElementId, String, bool)> = types::types_for(model, &e.kind)
             .into_iter()
             .map(|(id, n, t)| (id, n.to_string(), t.is_curtain()))
             .collect();
+        choices.sort_by_cached_key(|(_, name, curtain)| (*curtain, name.to_lowercase()));
         let current = types::type_of(model, e).map(|(t, _)| t.id);
         let overrides = e
             .of_type
@@ -974,7 +977,8 @@ impl CreaBimApp {
         scroll_category: Option<TypeCategory>,
     ) {
         let model = self.doc.model();
-        let all = types::types(model);
+        let mut all = types::types(model);
+        all.sort_by_cached_key(|(_, name, _)| name.to_lowercase());
         let current = self
             .types
             .current

@@ -9,6 +9,9 @@ use super::*;
 use creabim_core::{sets, Model, Transaction, ViewHidden};
 use std::collections::HashSet;
 
+#[path = "sets_file.rs"]
+mod sets_file;
+
 /// The window's own state, for the session.
 #[derive(Default)]
 pub(super) struct SetsUi {
@@ -28,6 +31,15 @@ pub(super) struct SetsUi {
     menu_pick: bool,
     /// The name typed for a new combination.
     new_combination: String,
+    save_name: String,
+    pending_load: Option<sets_file::SetFile>,
+}
+
+impl SetsUi {
+    pub(super) fn reset_file_state(&mut self) {
+        self.save_name.clear();
+        self.pending_load = None;
+    }
 }
 
 /// What a click asks for, done once the window or menu is drawn.
@@ -61,6 +73,10 @@ pub(super) enum Ask {
     /// A copy of the active view following this combination.
     ViewFromCombination(ElementId),
     DuplicateCombination(ElementId),
+    SaveFile,
+    LoadFile,
+    ReplaceFile,
+    CancelFile,
 }
 
 /// What the tree rows need to read, gathered before they draw.
@@ -163,6 +179,29 @@ impl CreaBimApp {
                 );
             }
         });
+        ui.horizontal(|ui| {
+            ui.add_sized(
+                [200.0, 20.0],
+                egui::TextEdit::singleline(&mut ui_state.save_name).hint_text("Save set"),
+            );
+            if ui.button("Save sets").clicked() {
+                asks.push(Ask::SaveFile);
+            }
+            if ui.button("Load sets").clicked() {
+                asks.push(Ask::LoadFile);
+            }
+        });
+        if ui_state.pending_load.is_some() {
+            ui.label("Replace existing Sets and folders? Elements will lose their Set assignments and combinations will be removed.");
+            ui.horizontal(|ui| {
+                if ui.button("Cancel").clicked() {
+                    asks.push(Ask::CancelFile);
+                }
+                if ui.button("Replace Sets").clicked() {
+                    asks.push(Ask::ReplaceFile);
+                }
+            });
+        }
         ui.add_space(4.0);
         ui.label(
             egui::RichText::new(match &view_name {
@@ -337,6 +376,10 @@ impl CreaBimApp {
 
     pub(super) fn run_set_ask(&mut self, ask: Ask) {
         match ask {
+            Ask::SaveFile => self.save_sets_file(),
+            Ask::LoadFile => self.load_sets_file(),
+            Ask::ReplaceFile => self.replace_sets_file(),
+            Ask::CancelFile => self.sets.pending_load = None,
             Ask::New(name, folder, parent) => {
                 let e = if folder {
                     sets::new_folder(&name, parent)
