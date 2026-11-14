@@ -506,7 +506,8 @@ fn build_scene_unjoined(
             | ElementKind::RoomSeparator(_)
             | ElementKind::Join(_)
             | ElementKind::Detail(_)
-            | ElementKind::DraftLine(_) => continue,
+            | ElementKind::DraftLine(_)
+            | ElementKind::DraftPolyline(_) => continue,
             ElementKind::Column(_)
             | ElementKind::Beam(_)
             | ElementKind::Roof(_)

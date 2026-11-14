@@ -206,6 +206,10 @@ impl CreaBimApp {
         if crate::draw::line::action(head, arg, &mut self.plan.line.look) {
             return true;
         }
+        if let Some(msg) = crate::draw::rectangle::action(head, arg, &mut self.plan) {
+            self.status = msg;
+            return true;
+        }
         let index = arg.parse::<usize>().ok();
         let id = self
             .doc

@@ -3464,6 +3464,7 @@ pub fn interact(
     let elsewhere = match doc.model().get(id).map(|e| &e.kind) {
         Some(ElementKind::Detail(d)) => Some(d.view) != input.view,
         Some(ElementKind::DraftLine(l)) => Some(l.view) != input.view,
+        Some(ElementKind::DraftPolyline(l)) => Some(l.view) != input.view,
         Some(ElementKind::View(v)) => v.callout.is_some_and(|c| Some(c.parent) != input.view),
         // a reference has grips only where it is shown: in its views, or
         // in 3D when it shows there (MU38: a profile's trace had grips in

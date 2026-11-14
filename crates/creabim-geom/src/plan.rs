@@ -689,6 +689,17 @@ pub enum PlanItem {
         points: Vec<DVec2>,
         rgb: [f32; 3],
     },
+    /// A drawn shape's fill: `rgb` (none clear) at `alpha`, under its
+    /// pattern's `lines` already clipped to it, in `ink` (none: the
+    /// drawing's). It takes no clicks.
+    Hatched {
+        id: ElementId,
+        points: Vec<DVec2>,
+        rgb: Option<[f32; 3]>,
+        alpha: f32,
+        lines: Vec<(DVec2, DVec2)>,
+        ink: Option<[f32; 3]>,
+    },
     /// Shaded surfaces as an image spanning `lo`..`hi`, drawn only inside `clip`.
     Image {
         id: ElementId,
@@ -727,6 +738,7 @@ impl PlanItem {
             | PlanItem::Tint { id, .. }
             | PlanItem::Room { id, .. }
             | PlanItem::Shade { id, .. }
+            | PlanItem::Hatched { id, .. }
             | PlanItem::Image { id, .. } => *id,
         }
     }
@@ -740,7 +752,8 @@ impl PlanItem {
             | PlanItem::Fill { points, .. }
             | PlanItem::Tint { points, .. }
             | PlanItem::Room { points, .. }
-            | PlanItem::Shade { points, .. } => pts.extend(points.iter().copied()),
+            | PlanItem::Shade { points, .. }
+            | PlanItem::Hatched { points, .. } => pts.extend(points.iter().copied()),
             PlanItem::Line {
                 pen: Pen::Guide, ..
             } => {}

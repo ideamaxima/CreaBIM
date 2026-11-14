@@ -832,6 +832,16 @@ pub fn annotations(model: &Model, view_id: ElementId, view: &View) -> Vec<PlanIt
             ElementKind::DraftLine(l) if l.view == view_id => {
                 out.extend(crate::draw::line::line_items(e.id, l, view.scale / 1000.0));
             }
+            ElementKind::DraftPolyline(l) if l.view == view_id => {
+                let pack = creabim_core::styles::active_pack(model);
+                let pattern = l.fill.pattern.as_deref().and_then(|n| pack.pattern(n));
+                out.extend(crate::draw::polyline::polyline_items(
+                    e.id,
+                    l,
+                    view.scale / 1000.0,
+                    pattern.as_deref(),
+                ));
+            }
             ElementKind::View(v) => {
                 if let Some(c) = v.callout.filter(|c| c.parent == view_id) {
                     let mm = view.scale / 1000.0;

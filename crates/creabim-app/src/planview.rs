@@ -88,10 +88,12 @@ pub enum Tool {
     Line,
     /// Two clicks measure a distance; nothing is drawn or saved.
     Measure,
+    /// The Draw tab's Rectangle: a closed polyline in one view.
+    Rectangle,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 43] = [
+    pub const ALL: [Tool; 44] = [
         Tool::Select,
         Tool::Wall,
         Tool::Door,
@@ -128,6 +130,7 @@ impl Tool {
         Tool::Note,
         Tool::Detail,
         Tool::Line,
+        Tool::Rectangle,
         Tool::SpotLevel,
         Tool::Sketch,
         Tool::Guide,
@@ -187,6 +190,7 @@ impl Tool {
             Tool::Detail => "Detail component",
             Tool::Line => "Line",
             Tool::Measure => "Measure",
+            Tool::Rectangle => "Rectangle",
         }
     }
 
@@ -232,6 +236,7 @@ impl Tool {
             Tool::RoomSeparator => "Click two points for a line that splits a room in two where there is no wall, such as between a kitchen and a dining room.",
             Tool::Callout => "On a plan or section, click two corners of a box round what to detail: it becomes a detail view at the scale in the top bar, numbered in a bubble on this view.",
             Tool::Measure => "Click two points to measure between them: distance, ΔX, ΔY and angle by the pointer, then in the status bar. Shift keeps it square, Alt drops the snaps. Nothing is drawn or saved; the next click starts a new measure, Esc or a right-click drops it.",
+            Tool::Rectangle => "Draw a rectangle in this view: two corners, from the centre, or from a side (pick in the top bar). Type its width (Tab: height) and press Enter; Shift makes a square, Alt drops the snaps. It is born empty: its fill, outline, area and perimeter are in Properties. It shows in this view only.",
             Tool::Line => "Click two points for a line in this view. Type its length (Tab: angle) and press Enter; Shift keeps it square, Alt drops the snaps. Its pen, pattern, colour and end marks are in the top bar for the next line, in Properties for a selected one. Lines show in this view only.",
             Tool::Detail => "Pick what to draw in the top bar, then click its points; Enter, a double-click or a right-click finishes (the first point again closes a region). Esc keeps what is drawn. Detail components show in this view only.",
             Tool::Ceiling => "Click inside a room for a ceiling over it that follows its walls (3, Fill room), or draw its outline (1 Polygon, 2 Rectangle, 4 From sketch). Set its height and thickness in the top bar or Properties.",
@@ -545,6 +550,8 @@ pub struct PlanState {
     pub line: crate::draw::line::LineTool,
     /// The Measure tool's first point.
     pub measure: crate::draw::measure::MeasureTool,
+    /// The Rectangle tool's method and first points.
+    pub rect: crate::draw::rectangle::RectTool,
     /// The set each tool draws into (Features 21).
     pub tool_sets: crate::toolsets::ToolSets,
     /// A view made in a pane that the app should open: a new detail view.
@@ -706,6 +713,7 @@ impl Default for PlanState {
             details: Default::default(),
             line: Default::default(),
             measure: Default::default(),
+            rect: Default::default(),
             tool_sets: Default::default(),
             want_view: None,
             step_prompt: None,
@@ -756,6 +764,7 @@ impl PlanState {
         self.align.clear();
         self.details.path.clear();
         self.measure.clear();
+        self.rect.clear();
         self.temp = Default::default();
     }
 
@@ -1585,7 +1594,8 @@ fn show_view(
         }
     }
     let pointer_world = response.hover_pos().map(|p| match kind {
-        PaneKind::Plan { .. } | PaneKind::Section { .. } if !shift => {
+        // (Shift squares a rectangle instead of keeping a line square)
+        PaneKind::Plan { .. } | PaneKind::Section { .. } if !shift || tool == Tool::Rectangle => {
             tool_snap.map_or(xf.to_world(p), |s| s.p.truncate())
         }
         PaneKind::Plan { level } => snap(
@@ -1644,7 +1654,23 @@ fn show_view(
         state.tracker.active = 0;
         state.tracker.fields[1].clear();
     }
+    let rect_tool =
+        tool == Tool::Rectangle && matches!(kind, PaneKind::Plan { .. } | PaneKind::Section { .. });
     let hover_world = match (state.pending, pointer_world, line_tool) {
+        (Some(a), Some(b), _)
+            if rect_tool && response.hovered() && state.rect.view == Some(view) =>
+        {
+            if state.tracker.keys(ui.ctx()) == crate::tracker::Keys::Enter {
+                tracker_enter = true;
+            }
+            Some(crate::draw::rectangle::end(
+                &state.rect,
+                &state.tracker,
+                a,
+                b,
+                shift,
+            ))
+        }
         (Some(a), Some(b), true) if response.hovered() => {
             if state.tracker.keys(ui.ctx()) == crate::tracker::Keys::Enter {
                 tracker_enter = true;
@@ -2357,6 +2383,19 @@ fn show_view(
     if tool == Tool::Line && matches!(kind, PaneKind::Plan { .. } | PaneKind::Section { .. }) {
         crate::draw::line::preview(&painter, &xf, state, view, hover_world, mm);
     }
+    if rect_tool {
+        let look = crate::handles::PillLook::of(&crate::theme::Palette::of(ui.ctx()));
+        crate::draw::rectangle::preview(
+            &painter,
+            &xf,
+            state,
+            view,
+            hover_world,
+            response.hover_pos(),
+            &snap_cfg.step_label(),
+            &look,
+        );
+    }
     if tool == Tool::Measure && matches!(kind, PaneKind::Plan { .. } | PaneKind::Section { .. }) {
         crate::draw::measure::preview_2d(
             ui,
@@ -2784,7 +2823,13 @@ fn show_view(
     }
 
     let mut error = None;
-    if let (true, Some(p), Tool::Line) = (tracker_enter, hover_world, tool) {
+    if let (true, Some(p), Tool::Rectangle) = (tracker_enter, hover_world, tool) {
+        let r = crate::draw::rectangle::click(doc, view, p, state, selection);
+        state.tracker.clear();
+        if let Err(e) = r {
+            error = Some(e.to_string());
+        }
+    } else if let (true, Some(p), Tool::Line) = (tracker_enter, hover_world, tool) {
         state.tracker.clear();
         if let Err(e) = crate::draw::line::click(doc, view, p, state, selection) {
             error = Some(e.to_string());
@@ -3011,6 +3056,9 @@ fn show_view(
             }
             (PaneKind::Plan { .. } | PaneKind::Section { .. }, Tool::Line) => {
                 crate::draw::line::click(doc, view, p, state, selection)
+            }
+            (PaneKind::Plan { .. } | PaneKind::Section { .. }, Tool::Rectangle) => {
+                crate::draw::rectangle::click(doc, view, p, state, selection)
             }
             (PaneKind::Plan { .. } | PaneKind::Section { .. }, Tool::Measure) => {
                 crate::draw::measure::click(state, view, kind, p);
@@ -3489,7 +3537,8 @@ fn plan_click(
         | Tool::Sketch
         | Tool::Callout
         | Tool::Detail
-        | Tool::Line => Ok(()),
+        | Tool::Line
+        | Tool::Rectangle => Ok(()),
         // a library profile placed at the click, pulled up (MU36)
         Tool::Extrusion if state.parts.extrusion_library.is_some() => {
             let name = state.parts.extrusion_library.clone().unwrap_or_default();
@@ -5639,6 +5688,9 @@ pub fn view_overrides(model: &creabim_core::Model, view: ElementId) -> HashMap<E
     // a drawn line's own pen, pattern and colour, under the overrides
     let own = |e: &creabim_core::Element| match &e.kind {
         ElementKind::DraftLine(l) if l.view == view => Some(crate::draw::line::own_look(l, &w)),
+        ElementKind::DraftPolyline(l) if l.view == view => Some(crate::draw::line::own_look_of(
+            l.weight, &l.pattern, l.colour, &w,
+        )),
         _ => None,
     };
     if v.look.overrides.is_empty() {
@@ -5727,6 +5779,24 @@ pub fn draw_item_with(
     // annotation text is a fixed size on paper, so it scales with zoom
     let text_px = |size: f64| (size * mm * xf.scale as f64) as f32;
     match item {
+        PlanItem::Hatched {
+            points,
+            rgb,
+            alpha,
+            lines,
+            ink: hatch_ink,
+            ..
+        } => crate::draw::polyline::draw_fill(
+            painter,
+            xf,
+            points,
+            *rgb,
+            *alpha,
+            lines,
+            *hatch_ink,
+            grey(70),
+            selected,
+        ),
         PlanItem::Fill {
             points,
             hatch: pattern,

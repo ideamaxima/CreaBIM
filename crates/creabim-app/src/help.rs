@@ -259,7 +259,7 @@ pub fn tool_page(t: Tool) -> &'static str {
         Tool::Ceiling => "ceilings",
         Tool::Callout => "details#callouts",
         Tool::Detail => "details#detail-components",
-        Tool::Line => "details",
+        Tool::Line | Tool::Rectangle => "details",
     }
 }
 
@@ -293,7 +293,7 @@ pub fn element_page(kind: &ElementKind) -> &'static str {
         ElementKind::Ceiling(_) => "ceilings",
         ElementKind::Join(_) => "joins",
         ElementKind::Detail(_) => "details#detail-components",
-        ElementKind::DraftLine(_) => "details",
+        ElementKind::DraftLine(_) | ElementKind::DraftPolyline(_) => "details",
         ElementKind::Dimension(_) => "dimensions",
         ElementKind::Tag(_) => "tags",
         ElementKind::Note(_) => "notes",

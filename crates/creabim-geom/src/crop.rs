@@ -122,6 +122,29 @@ pub fn crop(d: &PlanView, lo: DVec2, hi: DVec2) -> PlanView {
                     });
                 }
             }
+            PlanItem::Hatched {
+                id,
+                points,
+                rgb,
+                alpha,
+                lines,
+                ink,
+            } => {
+                let points = clip_polygon(points, lo, hi);
+                if !points.is_empty() {
+                    items.push(PlanItem::Hatched {
+                        id: *id,
+                        points,
+                        rgb: *rgb,
+                        alpha: *alpha,
+                        lines: lines
+                            .iter()
+                            .filter_map(|(a, b)| clip_segment(*a, *b, lo, hi))
+                            .collect(),
+                        ink: *ink,
+                    });
+                }
+            }
             PlanItem::Fill {
                 id,
                 points,

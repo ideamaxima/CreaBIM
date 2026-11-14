@@ -178,6 +178,7 @@ pub(crate) fn tool_icon(t: Tool) -> &'static str {
         Tool::Callout => "callout",
         Tool::Detail => "detail-component",
         Tool::Line => "slash",
+        Tool::Rectangle => "square",
     }
 }
 
@@ -215,6 +216,7 @@ fn tool_group(t: Tool) -> u8 {
         | Tool::Note
         | Tool::Detail
         | Tool::Line
+        | Tool::Rectangle
         | Tool::SpotLevel => 3,
         Tool::Sketch | Tool::Guide | Tool::Grid | Tool::Level => 4,
     }
@@ -2866,6 +2868,11 @@ impl CreaBimApp {
                 }),
         );
         if tool == Tool::Line {
+            options.extend(crate::draw::line::options(&self.plan.line.look));
+        }
+        // a rectangle: its method, then the Line's pen, pattern and colour
+        if tool == Tool::Rectangle {
+            options.push(crate::draw::rectangle::options(&self.plan.rect));
             options.extend(crate::draw::line::options(&self.plan.line.look));
         }
         if tool == Tool::Detail {
