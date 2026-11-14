@@ -20,6 +20,7 @@ Issue and pull request numbers refer to the upstream repository.
   aside); the Sets window says so in red as you type.
 
 ### Added
+- A drawn rectangle stays a rectangle: its corner grips resize it (the opposite corner stays, also when turned) and its side grips push a side; Width and Height are in Properties, and *Convert to polyline* frees its corners.
 - On dark paper, a drawn line's or shape's own colour, a fill's colour and a hatch in its own colour show as they are; lines in the drawing's ink still turn light.
 - Line patterns show on screen as they print: Dotted shows dots, Centre and Dash-dot their long and short dashes (on drawn lines, rectangles and overrides of a view).
 - **Rectangle** tool in the Draw tab: two corners, from the centre, or from a side (any angle), with typed width and height and Shift for a square. It is one closed shape, born empty; in Properties it has its area and perimeter, an outline that can be hidden, and a fill of a colour and/or a hatch pattern from Styles › Patterns with its own colour, rotation, scale and transparency. Tab edits its corners.

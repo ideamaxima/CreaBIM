@@ -8815,6 +8815,7 @@ impl CreaBimApp {
                 ElementKind::Reference(_) => "Reference",
                 ElementKind::Note(_) => "Note",
                 ElementKind::DraftLine(_) => "Line",
+                ElementKind::DraftPolyline(l) if l.is_rectangle() => "Rectangle",
                 ElementKind::DraftPolyline(l) if l.closed => "Closed polyline",
                 ElementKind::DraftPolyline(_) => "Polyline",
                 ElementKind::PaperMark(m) => match m.kind {

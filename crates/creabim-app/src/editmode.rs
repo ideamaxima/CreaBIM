@@ -189,7 +189,9 @@ pub fn rings(model: &Model, e: &Element) -> Vec<RingInfo> {
                 reshapes: !matches!(d.kind, creabim_core::DetailKind::BreakLine),
             }]
         }
-        // a drawn shape: its corners, on its view's paper
+        // a drawn shape: its corners, on its view's paper; a rectangle
+        // keeps its own grips, which keep it one
+        ElementKind::DraftPolyline(l) if l.is_rectangle() => vec![],
         ElementKind::DraftPolyline(l) => {
             let Some(frame) = creabim_core::DrawingFrame::of(model, l.view) else {
                 return vec![];
