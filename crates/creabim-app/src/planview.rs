@@ -5660,7 +5660,8 @@ pub struct Ovr {
     /// Projection and cut pens, as factors of the view's own.
     pub proj: f32,
     pub cut: f32,
-    pub dashed: bool,
+    /// Its line pattern, drawn as it prints; none is solid.
+    pub dashes: Option<crate::linepattern::Dashes>,
 }
 
 impl Default for Ovr {
@@ -5671,7 +5672,7 @@ impl Default for Ovr {
             hatch_off: false,
             proj: 1.0,
             cut: 1.0,
-            dashed: false,
+            dashes: None,
         }
     }
 }
@@ -5736,7 +5737,7 @@ pub fn view_overrides(model: &creabim_core::Model, view: ElementId) -> HashMap<E
                 ));
             }
             if let Some(pat) = &o.pattern {
-                r.dashed = !matches!(pat, creabim_core::styles::LinePattern::Solid);
+                r.dashes = crate::linepattern::Dashes::from_pattern(pat);
             }
             if o.halftone {
                 r.fade = 1.0 - (1.0 - r.fade) * 0.5;
@@ -5894,28 +5895,14 @@ pub fn draw_item_with(
                     } else {
                         (1.0 * o.proj, grey(120))
                     };
-                    if o.dashed {
-                        painter.extend(egui::Shape::dashed_line(
-                            &[a, b],
-                            Stroke::new(w, c),
-                            6.0,
-                            4.0,
-                        ));
-                    } else {
-                        painter.line_segment([a, b], Stroke::new(w, c));
-                    }
+                    let px_mm = (mm * xf.scale as f64) as f32;
+                    let d = o.dashes.as_ref();
+                    crate::linepattern::segment(painter, a, b, Stroke::new(w, c), d, px_mm);
                 }
                 Pen::Cut => {
-                    if o.dashed {
-                        painter.extend(egui::Shape::dashed_line(
-                            &[a, b],
-                            Stroke::new(1.8 * o.cut, ink),
-                            6.0,
-                            4.0,
-                        ));
-                    } else {
-                        painter.line_segment([a, b], Stroke::new(1.8 * o.cut, ink));
-                    }
+                    let px_mm = (mm * xf.scale as f64) as f32;
+                    let (s, d) = (Stroke::new(1.8 * o.cut, ink), o.dashes.as_ref());
+                    crate::linepattern::segment(painter, a, b, s, d, px_mm);
                 }
                 Pen::Hidden => {
                     let (w, c) = if selected {

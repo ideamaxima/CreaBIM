@@ -107,7 +107,7 @@ pub fn own_look_of(
         }),
         proj: f.clamp(0.2, 6.0),
         cut: f.clamp(0.2, 6.0),
-        dashed: !matches!(pattern, LinePattern::Solid),
+        dashes: crate::linepattern::Dashes::from_pattern(pattern),
         ..Default::default()
     }
 }
