@@ -94,7 +94,7 @@ pub fn entries(tab: usize) -> Vec<Entry> {
         ],
         // 2D drafting: placeholders until each tool is made
         1 => vec![
-            soon("Line", "slash"),
+            T(Tool::Line),
             soon("Rectangle", "square"),
             soon("Polyline", "waypoints"),
             Sep,

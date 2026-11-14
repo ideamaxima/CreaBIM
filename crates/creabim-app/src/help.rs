@@ -259,6 +259,7 @@ pub fn tool_page(t: Tool) -> &'static str {
         Tool::Ceiling => "ceilings",
         Tool::Callout => "details#callouts",
         Tool::Detail => "details#detail-components",
+        Tool::Line => "details",
     }
 }
 
@@ -292,6 +293,7 @@ pub fn element_page(kind: &ElementKind) -> &'static str {
         ElementKind::Ceiling(_) => "ceilings",
         ElementKind::Join(_) => "joins",
         ElementKind::Detail(_) => "details#detail-components",
+        ElementKind::DraftLine(_) => "details",
         ElementKind::Dimension(_) => "dimensions",
         ElementKind::Tag(_) => "tags",
         ElementKind::Note(_) => "notes",
@@ -948,8 +950,20 @@ mod tests {
     fn keys_in_code() -> Vec<String> {
         let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
         let mut out = vec![];
-        for f in std::fs::read_dir(dir).unwrap() {
-            let path = f.unwrap().path();
+        // the files of `src` and of its folders (`draw/`…)
+        let mut files = vec![];
+        let mut dirs = vec![std::path::PathBuf::from(dir)];
+        while let Some(d) = dirs.pop() {
+            for f in std::fs::read_dir(d).unwrap() {
+                let path = f.unwrap().path();
+                if path.is_dir() {
+                    dirs.push(path);
+                } else {
+                    files.push(path);
+                }
+            }
+        }
+        for path in files {
             if path.file_name().is_some_and(|n| n == "help.rs") {
                 continue;
             }

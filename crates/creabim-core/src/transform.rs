@@ -449,6 +449,12 @@ pub fn transformed(model: &Model, e: &Element, t: &Xform) -> Option<Element> {
             }
             d.validate().ok()?;
         }
+        ElementKind::DraftLine(l) => {
+            let frame = crate::DrawingFrame::of(model, l.view)?;
+            l.a = frame.to_drawing(t.point3(frame.to_model(l.a)));
+            l.b = frame.to_drawing(t.point3(frame.to_model(l.b)));
+            l.validate().ok()?;
+        }
         // a crop box stays square to the axes: it only moves
         ElementKind::CropBox(c) => match t {
             Xform::Move(d) => {
@@ -631,6 +637,10 @@ pub fn pivot(model: &Model, id: ElementId) -> Option<DVec3> {
             let frame = crate::DrawingFrame::of(model, d.view)?;
             frame.to_model(mean(&d.points))
         }
+        ElementKind::DraftLine(l) => {
+            let frame = crate::DrawingFrame::of(model, l.view)?;
+            frame.to_model((l.a + l.b) / 2.0)
+        }
         ElementKind::Dimension(d) => {
             let frame = crate::DrawingFrame::of(model, d.view)?;
             let (a, b) = (drawn_at(model, &d.a)?, drawn_at(model, &d.b)?);
@@ -699,6 +709,7 @@ pub fn duplicate(model: &Model, id: ElementId) -> Vec<Element> {
             | ElementKind::RoomSeparator(_)
             | ElementKind::Ceiling(_)
             | ElementKind::Detail(_)
+            | ElementKind::DraftLine(_)
     ) && !crate::members::is_member(&e.kind)
     {
         return vec![];

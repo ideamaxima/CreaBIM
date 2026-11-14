@@ -12,6 +12,7 @@ pub mod cropbox;
 pub mod curtain;
 pub mod declutter;
 pub mod detail;
+pub mod draw;
 pub mod looks;
 pub mod markers;
 pub mod members;

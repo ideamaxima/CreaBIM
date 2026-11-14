@@ -14,6 +14,7 @@ mod centres;
 mod choices;
 mod commands;
 mod detailtool;
+mod draw;
 mod editmode;
 mod files;
 mod fillpreview;

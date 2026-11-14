@@ -829,6 +829,9 @@ pub fn annotations(model: &Model, view_id: ElementId, view: &View) -> Vec<PlanIt
                     look,
                 ));
             }
+            ElementKind::DraftLine(l) if l.view == view_id => {
+                out.extend(crate::draw::line::line_items(e.id, l, view.scale / 1000.0));
+            }
             ElementKind::View(v) => {
                 if let Some(c) = v.callout.filter(|c| c.parent == view_id) {
                     let mm = view.scale / 1000.0;

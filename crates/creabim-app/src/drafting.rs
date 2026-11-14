@@ -164,6 +164,9 @@ impl CreaBimApp {
             );
             items
         };
+        if let Some(items) = crate::draw::line::menu(key, &self.plan.line.look) {
+            return Some(items);
+        }
         Some(match key {
             "dimstyle" => style_items(StyleUse::Dimensions, self.plan.anno.dim_style),
             "notestyle" => style_items(StyleUse::Notes, self.plan.anno.note_style),
@@ -200,6 +203,9 @@ impl CreaBimApp {
 
     /// Run one of this module's actions; false when it is not one.
     pub(super) fn drafting_action(&mut self, head: &str, arg: &str) -> bool {
+        if crate::draw::line::action(head, arg, &mut self.plan.line.look) {
+            return true;
+        }
         let index = arg.parse::<usize>().ok();
         let id = self
             .doc

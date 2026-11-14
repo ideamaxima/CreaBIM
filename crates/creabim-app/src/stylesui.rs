@@ -67,7 +67,7 @@ pub(super) const STYLED: [Category; 20] = [
 ];
 
 /// A weight picker: *As drawn*, one of the pens, or millimetres.
-fn weight_combo(
+pub(crate) fn weight_combo(
     ui: &mut egui::Ui,
     salt: impl std::hash::Hash + std::fmt::Debug,
     w: &mut Option<Weight>,
@@ -113,7 +113,7 @@ fn weight_combo(
     changed
 }
 
-fn pattern_combo(
+pub(crate) fn pattern_combo(
     ui: &mut egui::Ui,
     salt: impl std::hash::Hash + std::fmt::Debug,
     p: &mut Option<LinePattern>,
@@ -134,7 +134,7 @@ fn pattern_combo(
 }
 
 /// A colour that can be left unset. A fill starts light, a line dark.
-fn colour_pick(ui: &mut egui::Ui, c: &mut Option<Rgb>, fill: bool, hover: &str) -> bool {
+pub(crate) fn colour_pick(ui: &mut egui::Ui, c: &mut Option<Rgb>, fill: bool, hover: &str) -> bool {
     let mut on = c.is_some();
     let mut changed = ui.checkbox(&mut on, "").on_hover_text(hover).changed();
     if changed {
