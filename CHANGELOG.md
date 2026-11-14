@@ -20,8 +20,8 @@ Issue and pull request numbers refer to the upstream repository.
 
 ### Added
 - Guides at a typed distance: after clicking an edge or a point, type how
-  far and press Enter; the pointer gives the side. Right-click a guide to
-  delete all guides on its level.
+  far and press Enter; the pointer gives the side, in plans and in 3D on
+  the level. Right-click a guide to delete all guides on its level.
 - Masters: pick several items (Shift+click, box, circle or lasso, Ctrl+A)
   and move, nudge, delete, duplicate or rotate them all at once.
 - Masters take any paper size: Width and Height typed in Properties, or

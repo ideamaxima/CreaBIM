@@ -31,6 +31,6 @@ They work in plans, sections and elevations.
 - `Backspace` takes a figure back, `Esc` clears what you typed.
 - Right-click a guide: *Delete* takes it away, *Delete all guides on this level* takes all of that level's in one step.
 
-In 3D, guides go on the [workplane](sketches#the-workplane); in a section, on the section plane.
+In 3D, guides go on the [workplane](sketches#the-workplane); in a section, on the section plane. On the level workplane a typed distance works as in plans; on a face or a free plane, guides go through two points.
 
 *View › Guides* (`Shift+G`) hides all guides in every view without deleting them.
