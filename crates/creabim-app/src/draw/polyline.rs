@@ -31,14 +31,6 @@ pub fn fields(ui: &mut egui::Ui, l: &mut DraftPolyline, patterns: &[String]) -> 
             l.set_size(w, h);
             label = "Rectangle size";
         }
-        if ui
-            .button("Convert to polyline")
-            .on_hover_text("Free its corners: then Tab moves, adds and removes them one by one")
-            .clicked()
-        {
-            l.shape = creabim_core::draw::ShapeKind::Free;
-            label = "Convert to polyline";
-        }
     } else {
         crate::props::row(ui, "Corners", |ui| ui.label(l.points.len().to_string()));
     }
@@ -62,6 +54,19 @@ pub fn fields(ui: &mut egui::Ui, l: &mut DraftPolyline, patterns: &[String]) -> 
     });
     let name = if l.closed { "Perimeter" } else { "Length" };
     crate::props::row(ui, name, |ui| ui.label(crate::units::len(l.length())));
+    if l.is_rectangle() {
+        // in the fields' column, under its readings
+        crate::props::row(ui, "", |ui| {
+            if ui
+                .button("Convert to polyline")
+                .on_hover_text("Free its corners: then Tab moves, adds and removes them one by one")
+                .clicked()
+            {
+                l.shape = creabim_core::draw::ShapeKind::Free;
+                label = "Convert to polyline";
+            }
+        });
+    }
 
     let mut look = LineLook {
         weight: l.weight,
