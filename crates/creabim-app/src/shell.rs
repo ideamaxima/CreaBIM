@@ -1681,29 +1681,7 @@ impl CreaBimApp {
                 self.restore_areas(None);
                 self.status = "Loaded the sample house with a beam inside its south wall. Hover it in Section A and press Tab to reach the beam.".into();
             }
-            "new.empty" => {
-                // two levels, in the units in use
-                let units = self.doc.model().units();
-                let mut m = Document::new();
-                let mut tx = Transaction::new("New project");
-                for (name, z) in [("Level 0", 0.0), ("Level 1", 3.0)] {
-                    tx = tx.insert(Element::new(
-                        name,
-                        ElementKind::Level(creabim_core::Level {
-                            elevation: z,
-                            height: 3.0,
-                        }),
-                    ));
-                }
-                let _ = m.commit(tx);
-                let tx = creabim_core::units::set_units(m.model(), units);
-                let _ = m.commit(tx);
-                self.load_model(m.model().clone());
-                self.restore_areas(None);
-                self.path = new_path("Untitled");
-                self.status =
-                    "New project with two levels. Pick the Wall tool to start drawing.".into();
-            }
+            "new.empty" => self.load_empty_project(),
             "new.project" => self.open_new_project(ctx),
             "new.sheet" => self.new_sheet(),
             "levels" => self.open_levels(),
@@ -1758,6 +1736,12 @@ impl CreaBimApp {
                 }
             }
             "recent.clear" => self.recent.clear(),
+            "recent.remove" => {
+                if let Some(i) = index {
+                    self.recent.remove(i);
+                }
+            }
+            "new.open" => self.open_from_new_project(ctx),
             "save" => self.save(),
             "saveas" => self.save_as(),
             "link" => {
@@ -3862,7 +3846,7 @@ impl CreaBimApp {
         let screen = ctx.viewport_rect();
         let size = egui::vec2(
             900.0f32.min(screen.width() - 32.0),
-            520.0f32.min(screen.height() - 32.0),
+            self.new_project_height().min(screen.height() - 32.0),
         );
         self.shell.popup = Some(Popup {
             key: "newproject".into(),
@@ -3882,6 +3866,9 @@ impl CreaBimApp {
             "starts": crate::app::appmenu::STARTS.iter().map(card).collect::<Vec<_>>(),
             "samples_title": "Samples to learn from · each shows one thing",
             "samples": crate::app::appmenu::SAMPLES.iter().map(card).collect::<Vec<_>>(),
+            "recents_title": "Open projects · recent files",
+            "recents": self.recent_cards(),
+            "recents_shown": 6,
             "note": "A sample opens as a new, unsaved project, so the original is never changed.",
         })
     }
@@ -4538,7 +4525,7 @@ fn popup_size(p: &Popup, screen: egui::Rect) -> egui::Vec2 {
 
 /// Where a new project or a sample would be saved: beside the projects
 /// opened before, never over one of them.
-fn new_path(name: &str) -> String {
+pub(super) fn new_path(name: &str) -> String {
     format!("{name}.creabim")
 }
 

@@ -59,6 +59,8 @@ mod marksui;
 mod mastersui;
 #[path = "materials.rs"]
 mod materials;
+#[path = "newproject.rs"]
+mod newproject;
 #[path = "objectsui.rs"]
 mod objectsui;
 #[path = "profilesui.rs"]
@@ -334,6 +336,9 @@ pub struct CreaBimApp {
     ifc_dialog: bool,
     /// The New project window, with the classic panels.
     new_project_classic: bool,
+    /// The New project window still to open, when the app started
+    /// without a file.
+    start_dialog: bool,
 }
 
 /// A pointer moving over the drawing area this recently (seconds) can't be
@@ -384,13 +389,12 @@ impl CreaBimApp {
         }
         app.areas.workspace = settings.workspace.clone();
         app.shell.settings = settings;
-        app.load_model(creabim_core::starter::starter_house());
-        // one area on the first plan: the last project's areas belong to it
-        app.restore_areas(None);
-        app.status = STARTER_LOADED.into();
-        // `creabim-app house.creabim` opens that file instead
-        if let Some(path) = launch_file(std::env::args().skip(1)) {
-            app.open_path(&path);
+        // an empty project under the New project window; `creabim-app
+        // house.creabim` opens that file instead
+        app.load_empty_project();
+        match launch_file(std::env::args().skip(1)) {
+            Some(path) => app.open_path(&path),
+            None => app.start_dialog = true,
         }
         app
     }
@@ -489,6 +493,7 @@ impl CreaBimApp {
             project_draft: None,
             ifc_dialog: false,
             new_project_classic: false,
+            start_dialog: false,
             marks: Default::default(),
             gstyles: Default::default(),
             level_copy: Default::default(),
@@ -11561,6 +11566,7 @@ impl eframe::App for CreaBimApp {
         self.reference_steps();
         self.calibrate_window(&ctx);
         self.sheets_export_window(&ctx);
+        self.startup_dialog(&ctx);
         self.new_project_window(&ctx);
         self.marks_window(&ctx);
         self.graphic_styles_window(&ctx);
@@ -11919,7 +11925,7 @@ fn window_title(path: &str, unsaved: bool) -> String {
     format!("{}{name} — {app}", if unsaved { "• " } else { "" })
 }
 
-fn file_label(path: &str) -> String {
+pub(crate) fn file_label(path: &str) -> String {
     std::path::Path::new(path)
         .file_name()
         .map_or(path.to_string(), |n| n.to_string_lossy().into_owned())

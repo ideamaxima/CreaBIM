@@ -137,6 +137,14 @@ impl Recent {
         self.store();
     }
 
+    /// Take one file off the list and save it; the file itself stays.
+    pub fn remove(&mut self, index: usize) {
+        if index < self.files.len() {
+            self.files.remove(index);
+            self.store();
+        }
+    }
+
     fn store(&self) {
         if let Some(p) = &self.path {
             if let Some(dir) = p.parent() {
@@ -537,5 +545,18 @@ mod tests {
             r.add(&format!("{i}.creabim"));
         }
         assert_eq!(r.files.len(), RECENT_MAX);
+    }
+
+    #[test]
+    fn one_recent_file_comes_off_the_list() {
+        let mut r = Recent::default();
+        for f in ["a.creabim", "b.creabim", "c.creabim"] {
+            r.add(f);
+        }
+        r.remove(1);
+        r.remove(9);
+        assert_eq!(r.files.len(), 2);
+        assert!(r.files[0].ends_with("c.creabim"));
+        assert!(r.files[1].ends_with("a.creabim"));
     }
 }
