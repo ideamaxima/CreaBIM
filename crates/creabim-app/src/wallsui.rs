@@ -283,15 +283,12 @@ pub(super) fn opening_fields(ui: &mut egui::Ui, model: &Model, o: &mut Opening) 
             crate::props::row(ui, "Flip", |ui| {
                 crate::props::flow(ui, |ui| {
                     let w = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
-                    // two leaves the same have no hand to flip
-                    let even = o.frame.leaves > 1 && o.frame.main_leaf <= 1e-9;
-                    if ui
-                        .add_enabled_ui(!even, |ui| {
-                            ui.add_sized([w, 22.0], egui::Button::new("Hand"))
-                        })
-                        .inner
-                        .on_hover_text("Hinge it on the other jamb (Shift+Space).")
-                        .clicked()
+                    // two leaves choose their main one's side on its own row
+                    if o.frame.leaves < 2
+                        && ui
+                            .add_sized([w, 22.0], egui::Button::new("Hand"))
+                            .on_hover_text("Hinge it on the other jamb (Shift+Space).")
+                            .clicked()
                     {
                         walls::flip_hand(o);
                         label = "Flip door hand"
@@ -309,11 +306,30 @@ pub(super) fn opening_fields(ui: &mut egui::Ui, model: &Model, o: &mut Opening) 
             if leaves_fields(ui, &mut o.frame) {
                 label = "Door leaves";
             }
+            if o.frame.leaves > 1 {
+                crate::props::row(ui, "Main leaf side", |ui| {
+                    crate::props::flow(ui, |ui| {
+                        let w = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
+                        let left = creabim_geom::opening::main_leaf_left(o, &host);
+                        for (side, name) in [(true, "Left"), (false, "Right")] {
+                            if ui
+                                .add_sized([w, 22.0], egui::Button::selectable(left == side, name))
+                                .on_hover_text("The leaf with the handle, seen from the side the door opens to (Shift+Space swaps it).")
+                                .clicked()
+                                && left != side
+                            {
+                                creabim_geom::opening::set_main_leaf_left(o, &host, side);
+                                label = "Door main leaf side";
+                            }
+                        }
+                    })
+                });
+            }
             crate::props::row(ui, "Swing angle", |ui| {
                 if crate::props::fill(
                     ui,
                     egui::DragValue::new(&mut o.swing_angle)
-                        .range(10.0..=180.0)
+                        .range(0.0..=90.0)
                         .speed(1.0)
                         .suffix("°"),
                 )

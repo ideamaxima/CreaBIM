@@ -2153,7 +2153,7 @@ fn opening_symbol(
             // sweeps: one leaf hinged by its hand, two at their own jambs
             let left = o.faces_left(w);
             let side = if left { 1.0 } else { -1.0 };
-            let turn = o.swing_angle.clamp(1.0, 180.0).to_radians();
+            let turn = o.swing_angle.clamp(0.0, 90.0).to_radians();
             let two = leaves.len() > 1;
             for (k, leaf) in leaves.iter().enumerate() {
                 let s = if left { leaf.hi.y } else { leaf.lo.y };
@@ -2189,14 +2189,17 @@ fn opening_symbol(
                 } else {
                     open.to_angle()
                 };
-                out.push(PlanItem::Arc {
-                    id,
-                    pen: Pen::Symbol,
-                    center: hinge,
-                    radius: r,
-                    start: a0,
-                    end: a0 + turn,
-                });
+                // shut (0°): the leaf in the hole, no arc
+                if turn > 1e-9 {
+                    out.push(PlanItem::Arc {
+                        id,
+                        pen: Pen::Symbol,
+                        center: hinge,
+                        radius: r,
+                        start: a0,
+                        end: a0 + turn,
+                    });
+                }
             }
         }
     }

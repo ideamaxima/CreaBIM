@@ -201,20 +201,35 @@ pub fn leaf_spans(frame: &OpeningFrame, l0: f64, l1: f64, gap: f64, of: f64) -> 
 /// How far a window's outside sill runs past the wall's face.
 pub const SILL_NOSE: f64 = 0.04;
 
+/// Is a door's main leaf (the one hinged as its hand, with the handle) on
+/// the left, seen from the side it opens to?
+pub fn main_leaf_left(o: &Opening, wall: &Wall) -> bool {
+    let hinge_at_start = !o.flip_hand;
+    hinge_at_start != o.faces_left(wall)
+}
+
+/// Hang a door's main leaf on the left or the right, seen from the side
+/// it opens to.
+pub fn set_main_leaf_left(o: &mut Opening, wall: &Wall, left: bool) {
+    if main_leaf_left(o, wall) != left {
+        o.flip_hand = !o.flip_hand;
+    }
+}
+
 /// Which way a door is hung, in words: its hinge side seen from the
 /// side it opens to, and which side that is.
 pub fn door_hand(o: &Opening, wall: &Wall) -> &'static str {
     // looking at the side it opens to, the wall's start is on the right
     // when that is the wall's left
     if o.frame.leaves > 1 {
-        return if o.flip_facing {
-            "Double, out"
-        } else {
-            "Double, in"
+        return match (main_leaf_left(o, wall), o.flip_facing) {
+            (true, false) => "Double, main left, in",
+            (false, false) => "Double, main right, in",
+            (true, true) => "Double, main left, out",
+            (false, true) => "Double, main right, out",
         };
     }
-    let hinge_at_start = !o.flip_hand;
-    match (hinge_at_start == o.faces_left(wall), o.flip_facing) {
+    match (!main_leaf_left(o, wall), o.flip_facing) {
         (true, false) => "Right, in",
         (false, false) => "Left, in",
         (true, true) => "Right, out",

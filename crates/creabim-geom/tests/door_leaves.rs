@@ -127,3 +127,41 @@ fn a_door_saved_before_keeps_one_leaf_and_a_right_angle() {
     assert_eq!(back.swing_angle, 90.0);
     assert_eq!(back.frame.leaves, 1);
 }
+
+#[test]
+fn a_shut_door_has_no_arc_and_past_a_right_angle_stops_there() {
+    for frame in [OpeningFrame::default(), two(0.0)] {
+        let (m, l, _, _) = door(frame, 0.0);
+        assert!(arcs(&m, l).is_empty());
+        let (m, l, _, _) = door(frame, 120.0);
+        for (_, sweep) in arcs(&m, l) {
+            assert!((sweep - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
+        }
+    }
+}
+
+#[test]
+fn the_main_leaf_and_its_handle_go_to_the_side_chosen() {
+    use creabim_geom::opening::{door_hand, main_leaf_left, set_main_leaf_left};
+    let handle_x = |o: &Opening, w: &Wall| {
+        let hs: Vec<_> = opening_boxes(o, w)
+            .into_iter()
+            .filter(|b| b.part == Part::Handle)
+            .collect();
+        hs.iter().map(|b| b.lo.x + b.hi.x).sum::<f64>() / (2.0 * hs.len() as f64)
+    };
+    // two leaves the same: the side can still be chosen
+    let (_, _, mut o, w) = door(two(0.0), 90.0);
+    let left = main_leaf_left(&o, &w);
+    let before = handle_x(&o, &w);
+    set_main_leaf_left(&mut o, &w, !left);
+    assert_eq!(main_leaf_left(&o, &w), !left);
+    let after = handle_x(&o, &w);
+    // by the meeting edge either way, on the other leaf
+    assert!((before - after).abs() > 0.1, "{before} {after}");
+    let side = if left { "right" } else { "left" };
+    assert_eq!(door_hand(&o, &w), format!("Double, main {side}, in"));
+    // choosing the side it is on already changes nothing
+    set_main_leaf_left(&mut o, &w, !left);
+    assert_eq!(main_leaf_left(&o, &w), !left);
+}

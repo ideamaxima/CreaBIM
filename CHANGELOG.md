@@ -23,8 +23,8 @@ Issue and pull request numbers refer to the upstream repository.
   aside); the Sets window says so in red as you type.
 
 ### Added
-- Double doors: a door type can have two leaves, the same or of different widths (*Leaves*, *Main leaf*), drawn as two leaves and two arcs in plan, two leaves in 3D, "Double" in schedules and a double door in IFC.
-- A door's *Swing angle* in Properties (90° unless set): its leaves and arcs in plan, and the check for objects in its way, open that far — for a door that can't open fully against a wall.
+- Double doors: a door type can have two leaves, the same or of different widths (*Leaves*, *Main leaf*), drawn as two leaves and two arcs in plan, two leaves in 3D, "Double" in schedules and a double door in IFC; *Main leaf side* (Left / Right, seen from the side it opens to) puts the main leaf and its handle on either side, even with two leaves the same.
+- A door's *Swing angle* in Properties (0° shut to 90°, 90° unless set): its leaves and arcs in plan, and the check for objects in its way, open that far — for a door that can't open fully against a wall.
 - Crashes are kept for good in `crashes.log`, next to the activity log, with what led up to each; a session that ended without closing (a crash that left no trace) is reported at the next start; problem reports include the last 20 crashes.
 - Save and load a reusable structure of Sets and folders from the Sets window.
 - Drawn shapes take **holes**: *Cut a hole* in Properties, then a rectangle drawn on the shape cuts a hole inside it or bites it across its edge (splitting it if it cuts through); holes are left out of the area, edited with Tab and removed in Properties. Their **area and perimeter** can be written on the drawing with a switch beside each: a label that follows the shape, moves freely and can be written by hand in its Properties.
