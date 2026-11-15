@@ -978,6 +978,7 @@ mod widen_tests {
             frame: Default::default(),
             flip_hand: false,
             flip_facing: false,
+            swing_angle: 90.0,
         };
         (m, host, o)
     }

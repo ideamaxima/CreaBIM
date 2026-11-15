@@ -1527,6 +1527,18 @@ pub struct Opening {
     /// window with its outside face (and its sill) to the wall's interior.
     #[serde(default, skip_serializing_if = "is_false")]
     pub flip_facing: bool,
+    /// How far a door's leaves open, in degrees: 90 unless a wall or a
+    /// survey says less (or more).
+    #[serde(default = "right_angle", skip_serializing_if = "is_right_angle")]
+    pub swing_angle: f64,
+}
+
+fn right_angle() -> f64 {
+    90.0
+}
+
+fn is_right_angle(a: &f64) -> bool {
+    (*a - 90.0).abs() < 1e-9
 }
 
 impl Opening {
@@ -1557,6 +1569,10 @@ pub struct OpeningFrame {
     /// Window panes side by side and one above the other, split by bars.
     pub panes_across: u32,
     pub panes_up: u32,
+    /// A door's leaves: one, or two meeting between the jambs.
+    pub leaves: u32,
+    /// With two leaves, the main one's width; 0 for two the same.
+    pub main_leaf: f64,
 }
 
 impl Default for OpeningFrame {
@@ -1566,6 +1582,8 @@ impl Default for OpeningFrame {
             depth: 0.1,
             panes_across: 1,
             panes_up: 1,
+            leaves: 1,
+            main_leaf: 0.0,
         }
     }
 }
@@ -1584,7 +1602,27 @@ impl OpeningFrame {
             depth: self.depth.clamp(0.02, t.max(0.02)),
             panes_across: self.panes_across.clamp(1, 12),
             panes_up: self.panes_up.clamp(1, 12),
+            leaves: self.leaves.clamp(1, 2),
+            main_leaf: self.main_leaf.max(0.0),
         }
+    }
+
+    /// The widths of a door's leaves across `w` (the clear width between
+    /// the jambs of a door `of` wide): the whole of it, or the main leaf (at
+    /// the hinge side) and the rest. The main leaf is given against the
+    /// door's width, as "90 + 50" on a 1.40 door, and takes the same share
+    /// of `w`; each leaf keeps at least a fifth.
+    pub fn leaf_widths(&self, w: f64, of: f64) -> Vec<f64> {
+        if self.leaves < 2 || w <= 0.0 {
+            return vec![w.max(0.0)];
+        }
+        let share = if self.main_leaf > 1e-9 && of > 1e-9 {
+            (self.main_leaf / of).clamp(0.2, 0.8)
+        } else {
+            0.5
+        };
+        let main = w * share;
+        vec![main, w - main]
     }
 }
 

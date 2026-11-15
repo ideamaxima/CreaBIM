@@ -126,6 +126,7 @@ pub(super) fn sample_model(
                     frame: Default::default(),
                     flip_hand: false,
                     flip_facing: false,
+                    swing_angle: 90.0,
                 }),
             ));
             // the section through its middle, whatever its width

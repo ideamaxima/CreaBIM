@@ -211,6 +211,10 @@ pub(crate) fn type_props(t: &ElementType) -> Vec<(&'static str, Prop)> {
             out.push(("FrameDepth", Prop::Length(o.frame.depth)));
             out.push(("PanesAcross", Prop::Count(o.frame.panes_across as i64)));
             out.push(("PanesUp", Prop::Count(o.frame.panes_up as i64)));
+            if o.frame.leaves > 1 {
+                out.push(("Leaves", Prop::Count(o.frame.leaves as i64)));
+                out.push(("MainLeaf", Prop::Length(o.frame.main_leaf)));
+            }
         }
         TypeParams::Slab(s) | TypeParams::Roof(s) => {
             out.push(("Thickness", Prop::Length(s.thickness)));
@@ -309,6 +313,8 @@ pub(crate) fn type_from(category: TypeCategory, curtain: bool, p: &Props) -> Typ
                     depth: l("FrameDepth", d.depth),
                     panes_across: count("PanesAcross"),
                     panes_up: count("PanesUp"),
+                    leaves: count("Leaves").clamp(1, 2),
+                    main_leaf: len(p, "MainLeaf").filter(|v| *v > 0.0).unwrap_or(0.0),
                 },
                 material: None,
             };

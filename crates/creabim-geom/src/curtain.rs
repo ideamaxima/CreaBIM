@@ -214,6 +214,7 @@ mod tests {
             frame: Default::default(),
             flip_hand: false,
             flip_facing: false,
+            swing_angle: 90.0,
         };
         let boxes = curtain_boxes(&w, &g, &[&door]);
         let glass = boxes

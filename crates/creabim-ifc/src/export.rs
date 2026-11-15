@@ -900,7 +900,9 @@ pub fn export_ifc4(model: &Model, opts: &ExportOptions) -> String {
                     ",$,{},{},.DOOR.,{},$",
                     real(o.height),
                     real(o.width),
-                    if hinge_left {
+                    if o.frame.leaves > 1 {
+                        ".DOUBLE_DOOR_SINGLE_SWING."
+                    } else if hinge_left {
                         ".SINGLE_SWING_LEFT."
                     } else {
                         ".SINGLE_SWING_RIGHT."
@@ -1128,6 +1130,9 @@ pub fn export_ifc4(model: &Model, opts: &ExportOptions) -> String {
         let (class, tail) = match &t.params {
             P::Wall(w) if w.curtain.is_some() => ("IFCCURTAINWALLTYPE", ",.NOTDEFINED."),
             P::Wall(_) => ("IFCWALLTYPE", ",.STANDARD."),
+            P::Door(d) if d.frame.leaves > 1 => {
+                ("IFCDOORTYPE", ",.DOOR.,.DOUBLE_DOOR_SINGLE_SWING.,.F.,$")
+            }
             P::Door(_) => ("IFCDOORTYPE", ",.DOOR.,.SINGLE_SWING_LEFT.,.F.,$"),
             P::Window(_) => ("IFCWINDOWTYPE", ",.WINDOW.,.SINGLE_PANEL.,.F.,$"),
             P::Slab(_) => ("IFCSLABTYPE", ",.FLOOR."),

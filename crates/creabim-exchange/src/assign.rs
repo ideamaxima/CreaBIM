@@ -208,6 +208,7 @@ pub fn fit(
                 frame: Default::default(),
                 flip_hand: false,
                 flip_facing: false,
+                swing_angle: 90.0,
             }))
         }
         Assign::Class(_) => Err("A class is not a shape.".into()),

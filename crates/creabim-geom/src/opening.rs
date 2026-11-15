@@ -131,8 +131,15 @@ pub fn opening_boxes(o: &Opening, wall: &Wall) -> Vec<PartBox> {
             let gap = 0.004;
             let lt = f.leaf();
             let (l0, l1) = (fw + gap, w - fw - gap);
-            add(Part::Leaf, b(l0, hd - lt, 0.01), b(l1, hd, h - fw - gap));
-            // a lever handle on each face, on the side away from the hinge
+            // one leaf hinged at x = 0, or the main one there and a second
+            // hinged at the far jamb, meeting between them
+            let spans = leaf_spans(&f.frame, l0, l1, gap, w);
+            for &(a, z) in &spans {
+                add(Part::Leaf, b(a, hd - lt, 0.01), b(z, hd, h - fw - gap));
+            }
+            // a lever handle on each face of the main leaf, on the side
+            // away from its hinge
+            let (l0, l1) = spans[0];
             if l1 - l0 > 0.3 && h > 1.2 {
                 let x = l1 - 0.07;
                 let z = 1.0f64.min(h * 0.45);
@@ -179,6 +186,18 @@ pub fn opening_boxes(o: &Opening, wall: &Wall) -> Vec<PartBox> {
     out
 }
 
+/// The leaves between `l0` and `l1` (along the opening, before it is
+/// turned to its hand): the main leaf first, from `l0`, then the second
+/// out to `l1`, `gap` apart, in a door `of` wide.
+pub fn leaf_spans(frame: &OpeningFrame, l0: f64, l1: f64, gap: f64, of: f64) -> Vec<(f64, f64)> {
+    let ws = frame.leaf_widths(l1 - l0, of);
+    if ws.len() < 2 {
+        return vec![(l0, l1)];
+    }
+    let m = l0 + ws[0];
+    vec![(l0, m - gap / 2.0), (m + gap / 2.0, l1)]
+}
+
 /// How far a window's outside sill runs past the wall's face.
 pub const SILL_NOSE: f64 = 0.04;
 
@@ -187,6 +206,13 @@ pub const SILL_NOSE: f64 = 0.04;
 pub fn door_hand(o: &Opening, wall: &Wall) -> &'static str {
     // looking at the side it opens to, the wall's start is on the right
     // when that is the wall's left
+    if o.frame.leaves > 1 {
+        return if o.flip_facing {
+            "Double, out"
+        } else {
+            "Double, in"
+        };
+    }
     let hinge_at_start = !o.flip_hand;
     match (hinge_at_start == o.faces_left(wall), o.flip_facing) {
         (true, false) => "Right, in",
@@ -348,6 +374,7 @@ mod tests {
             frame,
             flip_hand: false,
             flip_facing: false,
+            swing_angle: 90.0,
         }
     }
 

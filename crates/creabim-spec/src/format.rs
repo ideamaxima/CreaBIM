@@ -314,6 +314,10 @@ spec_struct! {
         panes_across: u32 = 1,
         /// Window panes one above the other.
         panes_up: u32 = 1,
+        /// A door's leaves: 1, or 2 meeting between the jambs.
+        leaves: u32 = 1,
+        /// With two leaves, the main one's width; 0 for two the same.
+        main_leaf: f64 = 0.0,
     }
 }
 
@@ -439,6 +443,8 @@ spec_struct! {
         /// A door opening to the wall's exterior; a window facing its
         /// interior.
         flip_facing: bool = false,
+        /// How far a door's leaves open, in degrees.
+        swing_angle: f64 = 90.0,
     }
 }
 

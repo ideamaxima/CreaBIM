@@ -4088,6 +4088,7 @@ fn section_tool(
                         frame: Default::default(),
                         flip_hand: false,
                         flip_facing: false,
+                        swing_angle: 90.0,
                     }),
                 ),
             );
@@ -7509,6 +7510,7 @@ fn place_opening(
                 frame: Default::default(),
                 flip_hand: false,
                 flip_facing: false,
+                swing_angle: 90.0,
             }),
         ),
     );
