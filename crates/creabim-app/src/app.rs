@@ -2426,6 +2426,7 @@ impl CreaBimApp {
         self.scene
             .retain(|i| !self.hidden.contains(&i.id) && !left_out.contains(&i.id));
         let cut_edges = self.crop_scene_3d();
+        crate::scenecheck::clean(self.doc.model(), &mut self.scene);
         snaps::begin_edge_round();
 
         let mut vertices = Vec::new();

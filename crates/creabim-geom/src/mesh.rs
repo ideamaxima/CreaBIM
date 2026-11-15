@@ -17,6 +17,24 @@ impl TriMesh {
         self.indices.is_empty()
     }
 
+    /// Drop the triangles that name a point the mesh doesn't have (and a
+    /// last, unfinished one), so nothing reading it runs off its end:
+    /// how many were dropped, and the largest index met.
+    pub fn drop_bad_triangles(&mut self) -> (usize, u32) {
+        let n = self.positions.len();
+        let max = self.indices.iter().copied().max().unwrap_or(0);
+        let whole = self.indices.len() / 3 * 3;
+        let before = self.indices.len().div_ceil(3);
+        let kept: Vec<u32> = self.indices[..whole]
+            .chunks(3)
+            .filter(|t| t.iter().all(|&i| (i as usize) < n))
+            .flatten()
+            .copied()
+            .collect();
+        self.indices = kept;
+        (before - self.indices.len() / 3, max)
+    }
+
     /// Add a planar polygon (convex, or with a supplied triangulation) facing `normal`.
     pub fn add_polygon(&mut self, points: &[DVec3], triangles: &[[usize; 3]], normal: DVec3) {
         let base = self.positions.len() as u32;
@@ -92,5 +110,33 @@ impl TriMesh {
                 p(t[0]).dot(p(t[1]).cross(p(t[2]))) / 6.0
             })
             .sum()
+    }
+}
+
+#[cfg(test)]
+mod bad_triangles {
+    use super::TriMesh;
+
+    fn tri() -> TriMesh {
+        TriMesh {
+            positions: vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            normals: vec![[0.0, 0.0, 1.0]; 3],
+            indices: vec![0, 1, 2],
+        }
+    }
+
+    #[test]
+    fn a_triangle_naming_a_missing_point_is_dropped() {
+        let mut m = tri();
+        m.indices.extend([0, 2, 65679]);
+        assert_eq!(m.drop_bad_triangles(), (1, 65679));
+        assert_eq!(m.indices, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn a_sound_mesh_is_left_alone() {
+        let mut m = tri();
+        assert_eq!(m.drop_bad_triangles().0, 0);
+        assert_eq!(m, tri());
     }
 }
