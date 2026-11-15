@@ -9,6 +9,9 @@ Issue and pull request numbers refer to the upstream repository.
 ## [Unreleased]
 
 ### Changed
+- CreaBIM opens on an empty project with the New project window, which now
+  lists the recent projects (name and folder, full path on hover), opens
+  any other file with Open…, and takes a project off the list with ×.
 - Types are listed alphabetically within each category in the Types window and type pickers.
 - Opening Types from a drawing tool's type list shows the first type in that category.
 - Graphic styles is available in Manage instead of appearing in both Manage and View.
