@@ -100,20 +100,8 @@ pub fn opening_boxes(o: &Opening, wall: &Wall) -> Vec<PartBox> {
             let (na, nu) = (f.frame.panes_across, f.frame.panes_up);
             let bar = fw * 0.6;
             let bd = hd * 0.7;
-            // pane edges along x and z: between bars, bars centred on the splits
-            let edges = |a: f64, z: f64, n: u32| -> Vec<(f64, f64)> {
-                let step = (z - a) / n as f64;
-                (0..n)
-                    .map(|i| {
-                        let lo = a + step * i as f64 + if i > 0 { bar / 2.0 } else { 0.0 };
-                        let hi =
-                            a + step * (i + 1) as f64 - if i + 1 < n { bar / 2.0 } else { 0.0 };
-                        (lo, hi)
-                    })
-                    .collect()
-            };
-            let xs = edges(x0, x1, na);
-            let zs = edges(z0, z1, nu);
+            let xs = pane_edges(x0, x1, na, bar);
+            let zs = pane_edges(z0, z1, nu, bar);
             for pair in xs.windows(2) {
                 add(Part::Frame, b(pair[0].1, -bd, z0), b(pair[1].0, bd, z1));
             }
@@ -134,14 +122,51 @@ pub fn opening_boxes(o: &Opening, wall: &Wall) -> Vec<PartBox> {
             // one leaf hinged at x = 0, or the main one there and a second
             // hinged at the far jamb, meeting between them
             let spans = leaf_spans(&f.frame, l0, l1, gap, w);
+            let (top, bottom) = (h - fw - gap, 0.01);
+            let lf = f.frame.leaf_frame;
             for &(a, z) in &spans {
-                add(Part::Leaf, b(a, hd - lt, 0.01), b(z, hd, h - fw - gap));
+                let (y0, y1) = (hd - lt, hd);
+                if !f.frame.glazed || z - a < 3.0 * lf || top - bottom < 4.0 * lf {
+                    add(Part::Leaf, b(a, y0, bottom), b(z, y1, top));
+                    continue;
+                }
+                // a glazed leaf: stiles, a top rail and a bottom rail twice
+                // as tall round glass split into panes by bars
+                let (ga, gz, g0, g1) = (a + lf, z - lf, bottom + 2.0 * lf, top - lf);
+                add(Part::Leaf, b(a, y0, bottom), b(ga, y1, top));
+                add(Part::Leaf, b(gz, y0, bottom), b(z, y1, top));
+                add(Part::Leaf, b(ga, y0, bottom), b(gz, y1, g0));
+                add(Part::Leaf, b(ga, y0, g1), b(gz, y1, top));
+                let bar = (lf * 0.4).min(0.05);
+                let mid = (y0 + y1) / 2.0;
+                let xs = pane_edges(ga, gz, f.frame.panes_across, bar);
+                let zs = pane_edges(g0, g1, f.frame.panes_up, bar);
+                for pair in xs.windows(2) {
+                    add(Part::Leaf, b(pair[0].1, y0, g0), b(pair[1].0, y1, g1));
+                }
+                for &(xa, xb) in &xs {
+                    for pair in zs.windows(2) {
+                        add(Part::Leaf, b(xa, y0, pair[0].1), b(xb, y1, pair[1].0));
+                    }
+                    for &(za, zb) in &zs {
+                        add(
+                            Part::Glass,
+                            b(xa, mid - GLASS / 2.0, za),
+                            b(xb, mid + GLASS / 2.0, zb),
+                        );
+                    }
+                }
             }
             // a lever handle on each face of the main leaf, on the side
             // away from its hinge
             let (l0, l1) = spans[0];
             if l1 - l0 > 0.3 && h > 1.2 {
-                let x = l1 - 0.07;
+                // on a glazed leaf, the middle of its stile, off the glass
+                let x = if f.frame.glazed && l1 - l0 >= 3.0 * lf {
+                    l1 - lf / 2.0
+                } else {
+                    l1 - 0.07
+                };
                 let z = 1.0f64.min(h * 0.45);
                 let (f0, f1) = (hd - lt, hd);
                 for (r0, r1, a0, a1) in [
@@ -184,6 +209,20 @@ pub fn opening_boxes(o: &Opening, wall: &Wall) -> Vec<PartBox> {
         }
     }
     out
+}
+
+/// Pane edges between `a` and `z` split `n` ways by bars `bar` wide,
+/// centred on the splits.
+fn pane_edges(a: f64, z: f64, n: u32, bar: f64) -> Vec<(f64, f64)> {
+    let n = n.max(1);
+    let step = (z - a) / n as f64;
+    (0..n)
+        .map(|i| {
+            let lo = a + step * i as f64 + if i > 0 { bar / 2.0 } else { 0.0 };
+            let hi = a + step * (i + 1) as f64 - if i + 1 < n { bar / 2.0 } else { 0.0 };
+            (lo, hi)
+        })
+        .collect()
 }
 
 /// The leaves between `l0` and `l1` (along the opening, before it is

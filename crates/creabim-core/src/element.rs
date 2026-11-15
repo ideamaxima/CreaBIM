@@ -1573,6 +1573,11 @@ pub struct OpeningFrame {
     pub leaves: u32,
     /// With two leaves, the main one's width; 0 for two the same.
     pub main_leaf: f64,
+    /// A door's leaves glazed: a frame round glass split into panes.
+    pub glazed: bool,
+    /// The width of a glazed leaf's stiles and top rail (its bottom rail
+    /// is twice it); the handle sits on the stile.
+    pub leaf_frame: f64,
 }
 
 impl Default for OpeningFrame {
@@ -1584,6 +1589,8 @@ impl Default for OpeningFrame {
             panes_up: 1,
             leaves: 1,
             main_leaf: 0.0,
+            glazed: false,
+            leaf_frame: 0.1,
         }
     }
 }
@@ -1604,6 +1611,8 @@ impl OpeningFrame {
             panes_up: self.panes_up.clamp(1, 12),
             leaves: self.leaves.clamp(1, 2),
             main_leaf: self.main_leaf.max(0.0),
+            glazed: self.glazed,
+            leaf_frame: self.leaf_frame.clamp(0.02, (w / 4.0).max(0.02)),
         }
     }
 

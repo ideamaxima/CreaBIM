@@ -317,19 +317,26 @@ pub(super) fn type_fields(ui: &mut egui::Ui, model: &Model, t: &mut ElementType)
             if len_field(ui, "Frame depth", &mut o.frame.depth, 0.02, 1.0) {
                 label = "Type frame";
             }
-            let panes = |ui: &mut egui::Ui, text: &str, v: &mut u32| {
-                crate::props::row(ui, text, |ui| {
-                    crate::props::fill(ui, egui::DragValue::new(v).range(1..=12)).changed()
-                })
-            };
-            if panes(ui, "Panes across", &mut o.frame.panes_across) {
-                label = "Type panes";
-            }
-            if panes(ui, "Panes up", &mut o.frame.panes_up) {
-                label = "Type panes";
-            }
-            if door && super::wallsui::leaves_fields(ui, &mut o.frame) {
-                label = "Type leaves";
+            if door {
+                if super::wallsui::leaves_fields(ui, &mut o.frame) {
+                    label = "Type leaves";
+                }
+                // a door's panes split the glass of its leaves, when glazed
+                if super::wallsui::glazing_fields(ui, &mut o.frame) {
+                    label = "Type glazing";
+                }
+            } else {
+                let panes = |ui: &mut egui::Ui, text: &str, v: &mut u32| {
+                    crate::props::row(ui, text, |ui| {
+                        crate::props::fill(ui, egui::DragValue::new(v).range(1..=12)).changed()
+                    })
+                };
+                if panes(ui, "Panes across", &mut o.frame.panes_across) {
+                    label = "Type panes";
+                }
+                if panes(ui, "Panes up", &mut o.frame.panes_up) {
+                    label = "Type panes";
+                }
             }
             if material_pick(ui, model, "opening", &mut o.material) {
                 label = "Type material";

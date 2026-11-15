@@ -343,6 +343,16 @@
           "type": "number",
           "description": "With two leaves, the main one's width; 0 for two the same.",
           "default": 0.0
+        },
+        "glazed": {
+          "type": "boolean",
+          "description": "A door's leaves glazed: a frame round glass split into panes.",
+          "default": false
+        },
+        "leaf_frame": {
+          "type": "number",
+          "description": "A glazed leaf's stiles and top rail; its bottom rail is twice it.",
+          "default": 0.1
         }
       },
       "additionalProperties": false

@@ -318,6 +318,10 @@ spec_struct! {
         leaves: u32 = 1,
         /// With two leaves, the main one's width; 0 for two the same.
         main_leaf: f64 = 0.0,
+        /// A door's leaves glazed: a frame round glass split into panes.
+        glazed: bool = false,
+        /// A glazed leaf's stiles and top rail; its bottom rail is twice it.
+        leaf_frame: f64 = 0.1,
     }
 }
 
