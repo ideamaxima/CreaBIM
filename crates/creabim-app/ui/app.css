@@ -1003,7 +1003,7 @@ kbd {
 
 /* ---------- New project ---------- */
 
-.np { display: flex; flex-direction: column; gap: 14px; padding: 20px 24px; height: 100%; background: var(--panel); border: 1px solid var(--border); border-radius: 0; }
+.np { display: flex; flex-direction: column; gap: 14px; padding: 20px 24px; height: 100%; overflow-y: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 0; }
 .np-head { display: flex; align-items: center; gap: 12px; }
 .np-logo, .np-logo svg.mark { width: 48px; height: 48px; }
 .np-head b { font-size: 17px; font-weight: 650; flex: 1; }
@@ -1016,13 +1016,26 @@ kbd {
 .np-text b { font-size: 13.5px; font-weight: 600; color: var(--text); }
 .np-text span { color: var(--muted); font-size: 12px; }
 .np-sub { font-size: 11px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.np-samples { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.np-samples { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .np-sample { display: flex; align-items: center; gap: 12px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); }
 .np-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--panel-2); display: grid; place-items: center; color: var(--text-2); flex: none; }
 .np-icon svg { width: 20px; height: 20px; }
 .np-big:hover, .np-sample:hover { border-color: var(--border-2); background: var(--panel-2); }
 .np-big.on, .np-sample.on { border: 1.5px solid var(--accent); background: var(--accent-soft); }
 .np-big.on .np-pic { background: var(--panel); }
+.np-sub { display: flex; align-items: baseline; justify-content: space-between; }
+.np-more { font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--accent-text); background: none; border: 0; padding: 0; }
+.np-recent { position: relative; min-width: 0; padding-right: 30px; cursor: pointer; }
+.np-recent .np-text { min-width: 0; }
+.np-recent .np-text span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np-x { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border-radius: 5px; border: 0; background: none; color: var(--faint); font-size: 15px; line-height: 1; display: grid; place-items: center; padding: 0; }
+.np-x:hover { background: var(--raise); color: var(--text); }
+.np-recent.gone { cursor: default; }
+.np-recent.gone .np-icon, .np-recent.gone .np-text { opacity: 0.5; }
+.np-recent.gone .np-text span { font-style: italic; }
+.np-recent.gone:hover { border-color: var(--border); background: var(--panel); }
+.np-recent.gone .np-x, .np-recent.gone .np-x:hover { color: #e5484d; }
+.np-recent.gone .np-x:hover { background: rgba(229, 72, 77, 0.15); }
 .np-foot { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; margin-top: auto; }
 .np-btn { height: 32px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--border-2); color: var(--text); background: var(--panel); font-weight: 550; }
 .np-btn:hover { background: var(--raise); }
@@ -1126,3 +1139,5 @@ html[data-theme="solarized"] { --logo-tile: #859900; --logo-ink: #FDF6E3; }
 .bar1 .brand .logo { background: var(--logo-tile) !important; color: var(--logo-ink) !important; }
 .bar1 .brand .logo svg.mark path[stroke="#4F6B4C"] { stroke: var(--logo-ink) !important; }
 
+/* a hint over a popup page, drawn by the page as the app draws its own */
+.page-tip { position: fixed; z-index: 1000; max-width: 360px; padding: 6px 9px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--border-2); color: var(--text); font-size: 12.5px; line-height: 1.4; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28); pointer-events: none; overflow-wrap: anywhere; }

@@ -1736,6 +1736,12 @@ impl CreaBimApp {
                 }
             }
             "recent.clear" => self.recent.clear(),
+            "recent.remove" => {
+                if let Some(i) = index {
+                    self.recent.remove(i);
+                }
+            }
+            "new.open" => self.open_from_new_project(ctx),
             "save" => self.save(),
             "saveas" => self.save_as(),
             "link" => {
@@ -3840,7 +3846,7 @@ impl CreaBimApp {
         let screen = ctx.viewport_rect();
         let size = egui::vec2(
             900.0f32.min(screen.width() - 32.0),
-            520.0f32.min(screen.height() - 32.0),
+            self.new_project_height().min(screen.height() - 32.0),
         );
         self.shell.popup = Some(Popup {
             key: "newproject".into(),
@@ -3860,6 +3866,9 @@ impl CreaBimApp {
             "starts": crate::app::appmenu::STARTS.iter().map(card).collect::<Vec<_>>(),
             "samples_title": "Samples to learn from · each shows one thing",
             "samples": crate::app::appmenu::SAMPLES.iter().map(card).collect::<Vec<_>>(),
+            "recents_title": "Open projects · recent files",
+            "recents": self.recent_cards(),
+            "recents_shown": 6,
             "note": "A sample opens as a new, unsaved project, so the original is never changed.",
         })
     }

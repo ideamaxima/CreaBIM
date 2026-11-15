@@ -694,19 +694,37 @@ impl CreaBimApp {
                         .on_hover_text(s.line)
                         .clicked()
                     {
-                        pick = Some(s.id);
+                        pick = Some(s.id.to_string());
                     }
+                }
+                if !self.recent.files.is_empty() {
+                    crate::props::section(ui, "Open projects");
+                }
+                for (i, f) in self.recent.files.iter().enumerate() {
+                    let gone = !std::path::Path::new(f).exists();
+                    let name = crate::app::file_label(f);
+                    if ui
+                        .add_enabled(!gone, egui::Button::new(name))
+                        .on_hover_text(f.as_str())
+                        .on_disabled_hover_text(format!("Not found: {f}"))
+                        .clicked()
+                    {
+                        pick = Some(format!("recent:{i}"));
+                    }
+                }
+                if ui.button("Open…").clicked() {
+                    pick = Some("new.open".into());
                 }
                 crate::props::section(ui, "Samples to learn from");
                 for s in SAMPLES.iter() {
                     if ui.button(s.title).on_hover_text(s.line).clicked() {
-                        pick = Some(s.id);
+                        pick = Some(s.id.to_string());
                     }
                 }
             });
         self.new_project_classic = open && pick.is_none();
         if let Some(id) = pick {
-            self.run_action(ctx, id);
+            self.run_action(ctx, &id);
         }
     }
 }

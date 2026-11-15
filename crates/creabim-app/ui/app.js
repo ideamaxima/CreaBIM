@@ -481,26 +481,39 @@
     showMore();
   }
 
-  // ---- New project: two large choices and the samples to learn from ----
+  // ---- New project: two large choices, the recent files, the samples ----
+
+  // the cards that can be picked, in keyboard order: a missing file can't
+  function dialogPicks(d) {
+    const recents = local.npAll ? d.recents : d.recents.slice(0, d.recents_shown);
+    return d.starts.concat(recents.filter((c) => !c.gone), d.samples).map((c) => c.id);
+  }
 
   function drawDialog(d) {
     const fresh = local.key !== S.key;
-    if (fresh) { local.key = S.key; local.pick = d.starts[0].id; }
-    const all = d.starts.concat(d.samples);
-    if (!all.some((c) => c.id === local.pick)) local.pick = d.starts[0].id;
+    if (fresh) { local.key = S.key; local.pick = d.starts[0].id; local.npAll = false; }
+    if (!dialogPicks(d).includes(local.pick)) local.pick = d.starts[0].id;
+    const text = (c) => `<span class="np-text"><b>${esc(c.title)}</b><span>${c.gone ? "Not found · " : ""}${esc(c.line)}</span></span>`;
     const card = (c, big) => `<button class="${big ? "np-big" : "np-sample"} ${local.pick === c.id ? "on" : ""}" data-pick="${esc(c.id)}" title="${esc(c.line)}">` +
-      (big ? `<span class="np-pic">${icon(c.icon)}</span><span class="np-text"><b>${esc(c.title)}</b><span>${esc(c.line)}</span></span>` :
-        `<span class="np-icon">${icon(c.icon)}</span><span class="np-text"><b>${esc(c.title)}</b><span>${esc(c.line)}</span></span>`) + `</button>`;
+      (big ? `<span class="np-pic">${icon(c.icon)}</span>` : `<span class="np-icon">${icon(c.icon)}</span>`) + text(c) + `</button>`;
+    const recent = (c) => `<div class="np-sample np-recent ${c.gone ? "gone" : ""} ${local.pick === c.id ? "on" : ""}" ${c.gone ? "" : `data-pick="${esc(c.id)}"`} title="${esc(c.path)}">` +
+      `<span class="np-icon">${icon(c.icon)}</span>` + text(c) +
+      `<button class="np-x" data-forget="${esc(c.id.split(":")[1])}" title="Remove from the list">×</button></div>`;
+    const many = d.recents.length > d.recents_shown;
+    const shown = local.npAll ? d.recents : d.recents.slice(0, d.recents_shown);
+    const more = many ? `<button class="np-more" data-np="more">${local.npAll ? "Show fewer" : "Show all " + d.recents.length}</button>` : "";
+    const recents = d.recents.length ? `<div class="np-sub"><span>${esc(d.recents_title)}</span>${more}</div><div class="np-samples">${shown.map(recent).join("")}</div>` : "";
+    const opens = local.pick.startsWith("recent:");
     root.innerHTML = `<div class="np"><div class="np-head"><span class="logo np-logo">${woven("new", fresh)}</span><b>${esc(d.title)}</b><span class="np-esc">Esc to close</span></div>` +
-      `<div class="np-starts">${d.starts.map((c) => card(c, true)).join("")}</div>` +
+      `<div class="np-starts">${d.starts.map((c) => card(c, true)).join("")}</div>` + recents +
       `<div class="np-sub">${esc(d.samples_title)}</div><div class="np-samples">${d.samples.map((c) => card(c, false)).join("")}</div>` +
-      `<div class="np-foot"><span>${esc(d.note)}</span><span class="spacer"></span><button class="np-btn" data-np="cancel">Cancel</button><button class="np-btn primary" data-np="create">Create</button></div></div>`;
+      `<div class="np-foot"><span>${opens ? "Opens the saved file." : esc(d.note)}</span><span class="spacer"></span><button class="np-btn" data-np="open">Open…</button><button class="np-btn" data-np="cancel">Cancel</button><button class="np-btn primary" data-np="create">${opens ? "Open" : "Create"}</button></div></div>`;
   }
 
   function dialogKey(e) {
     const d = S && S.dialog;
     if (!d) return false;
-    const all = d.starts.concat(d.samples).map((c) => c.id);
+    const all = dialogPicks(d);
     let i = Math.max(0, all.indexOf(local.pick));
     if (e.key === "Escape") post({ t: "close" });
     else if (e.key === "Enter") post({ t: "act", id: local.pick });
@@ -513,13 +526,18 @@
 
   document.addEventListener("click", (e) => {
     if (!(S && S.dialog)) return;
+    const forget = e.target.closest && e.target.closest("[data-forget]");
+    if (forget) { if (local.pick.startsWith("recent:")) local.pick = S.dialog.starts[0].id; post({ t: "act", id: "recent.remove:" + forget.dataset.forget, keep: true }); return; }
     const pick = e.target.closest && e.target.closest("[data-pick]");
     if (pick) { local.pick = pick.dataset.pick; drawDialog(S.dialog); return; }
     const b = e.target.closest && e.target.closest("[data-np]");
+    if (b && b.dataset.np === "more") { local.npAll = !local.npAll; drawDialog(S.dialog); }
+    if (b && b.dataset.np === "open") post({ t: "act", id: "new.open" });
     if (b && b.dataset.np === "cancel") post({ t: "close" });
     if (b && b.dataset.np === "create") post({ t: "act", id: local.pick });
   });
   document.addEventListener("dblclick", (e) => {
+    if (e.target.closest && e.target.closest("[data-forget]")) return;
     const pick = S && S.dialog && e.target.closest && e.target.closest("[data-pick]");
     if (pick) post({ t: "act", id: pick.dataset.pick });
   });
@@ -1100,10 +1118,26 @@
   // tooltip is kept from showing, the text goes to the app instead.
   (function () {
     let timer = null, shown = null;
+    // over a popup the app can't draw (the popup is on top), so the page
+    // shows the tip itself, looking the same
+    let own = null;
     function hide() {
       clearTimeout(timer);
       timer = null;
-      if (shown) { shown = null; post({ t: "tip", text: "" }); }
+      if (own) { own.remove(); own = null; }
+      if (shown) { shown = null; if (pane !== "popup") post({ t: "tip", text: "" }); }
+    }
+    function showOwn(el, text) {
+      own = document.createElement("div");
+      own.className = "page-tip";
+      own.textContent = text;
+      document.body.appendChild(own);
+      const r = el.getBoundingClientRect(), t = own.getBoundingClientRect();
+      const x = Math.max(4, Math.min(r.left, window.innerWidth - t.width - 4));
+      const below = r.bottom + 6;
+      const y = below + t.height > window.innerHeight - 4 ? r.top - t.height - 6 : below;
+      own.style.left = x + "px";
+      own.style.top = y + "px";
     }
     document.addEventListener("mouseover", (e) => {
       const el = e.target.closest && e.target.closest("[title], [data-tip]");
@@ -1119,6 +1153,7 @@
       timer = setTimeout(() => {
         const r = el.getBoundingClientRect();
         shown = el;
+        if (pane === "popup" && S && S.dialog) { showOwn(el, text); return; }
         post({ t: "tip", text, x: r.left, y: r.top, w: r.width, h: r.height });
       }, 450);
     });

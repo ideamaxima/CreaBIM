@@ -11925,7 +11925,7 @@ fn window_title(path: &str, unsaved: bool) -> String {
     format!("{}{name} — {app}", if unsaved { "• " } else { "" })
 }
 
-fn file_label(path: &str) -> String {
+pub(crate) fn file_label(path: &str) -> String {
     std::path::Path::new(path)
         .file_name()
         .map_or(path.to_string(), |n| n.to_string_lossy().into_owned())
