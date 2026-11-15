@@ -14,6 +14,7 @@ mod centres;
 mod choices;
 mod colourpick;
 mod commands;
+mod crashlog;
 mod detailtool;
 mod draw;
 mod editmode;
@@ -80,6 +81,12 @@ fn main() -> eframe::Result {
             "CRASH: {info}
 {trace}"
         ));
+        crashlog::record(&format!("{info}\n{trace}"));
+        // kept already: the next start needn't report it as unclosed (a
+        // background thread's panic leaves the app running, marker and all)
+        if std::thread::current().name() == Some("main") {
+            crashlog::end();
+        }
         before(info);
     }));
     #[cfg(target_os = "linux")]
@@ -110,6 +117,7 @@ fn main() -> eframe::Result {
     );
     // a start with no close after it was a crash, or is still open
     actlog::line("=== CreaBIM closed ===");
+    crashlog::end();
     r
 }
 

@@ -359,6 +359,7 @@ impl CreaBimApp {
             .map(|rs| Viewport3d::new(&rs.device));
         let mut app = Self::blank(viewport);
         crate::actlog::start();
+        crate::crashlog::begin();
         // the graphics card, for problem reports (MU40)
         if let Some(rs) = cc.wgpu_render_state.as_ref() {
             let i = rs.adapter.get_info();

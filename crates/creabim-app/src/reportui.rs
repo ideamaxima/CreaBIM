@@ -368,6 +368,10 @@ impl CreaBimApp {
         if let Some(log) = crate::actlog::path().and_then(|p| std::fs::read(p).ok()) {
             files.push(("activity.log".into(), tail(log)));
         }
+        // the crashes kept for good, the last twenty
+        if let Some(c) = crate::crashlog::last(20).filter(|c| !c.is_empty()) {
+            files.push(("crashes.log".into(), c.into_bytes()));
+        }
         if let Some(s) =
             crate::files::settings_dir().and_then(|d| std::fs::read(d.join("settings.json")).ok())
         {
