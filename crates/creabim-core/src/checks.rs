@@ -71,7 +71,7 @@ fn zones(model: &Model, o: &Opening, w: &Wall) -> Zones {
         // each leaf's sweep: an arc of the swing angle about its hinge, the
         // main leaf hinged by the door's hand, a second at the other jamb
         let widths = o.frame.leaf_widths(o.width, o.width);
-        let turn = o.swing_angle.clamp(1.0, 180.0).to_radians();
+        let turn = o.swing_angle.clamp(0.0, 90.0).to_radians();
         let main = if o.flip_hand { (u1, -1.0) } else { (u0, 1.0) };
         let leaves = [main, (u0 + u1 - main.0, -main.1)];
         for (&(hinge_u, towards), &r) in leaves.iter().zip(&widths) {
@@ -83,7 +83,10 @@ fn zones(model: &Model, o: &Opening, w: &Wall) -> Zones {
                 let a = turn * i as f64 / 8.0;
                 sweep.push(hinge + (along * a.cos() + out * a.sin()) * r);
             }
-            parts.push((Blocks::Swing, sweep));
+            // shut (0°): nothing swept
+            if turn > 1e-9 {
+                parts.push((Blocks::Swing, sweep));
+            }
         }
     } else {
         // and a sliver in front of each face: what is fixed to the wall there
