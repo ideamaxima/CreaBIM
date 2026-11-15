@@ -140,6 +140,42 @@ fn a_shut_door_has_no_arc_and_past_a_right_angle_stops_there() {
     }
 }
 
+fn glazed(leaves: u32, across: u32, up: u32) -> OpeningFrame {
+    OpeningFrame {
+        leaves,
+        glazed: true,
+        panes_across: across,
+        panes_up: up,
+        ..Default::default()
+    }
+}
+
+fn count(o: &Opening, w: &Wall, part: Part) -> usize {
+    opening_boxes(o, w)
+        .iter()
+        .filter(|b| b.part == part)
+        .count()
+}
+
+#[test]
+fn a_glazed_leaf_holds_its_panes() {
+    let (_, _, o, w) = door(glazed(1, 1, 3), 90.0);
+    assert_eq!(count(&o, &w, Part::Glass), 3);
+    let (_, _, o, w) = door(glazed(2, 2, 1), 90.0);
+    assert_eq!(count(&o, &w, Part::Glass), 4);
+    // a plain door has none
+    let (_, _, o, w) = door(OpeningFrame::default(), 90.0);
+    assert_eq!(count(&o, &w, Part::Glass), 0);
+}
+
+#[test]
+fn a_glazed_door_keeps_one_arc_per_leaf_and_no_glass_across_its_gap() {
+    for leaves in [1, 2] {
+        let (m, l, _, _) = door(glazed(leaves, 2, 3), 90.0);
+        assert_eq!(arcs(&m, l).len(), leaves as usize);
+    }
+}
+
 #[test]
 fn the_main_leaf_and_its_handle_go_to_the_side_chosen() {
     use creabim_geom::opening::{door_hand, main_leaf_left, set_main_leaf_left};
@@ -164,4 +200,21 @@ fn the_main_leaf_and_its_handle_go_to_the_side_chosen() {
     // choosing the side it is on already changes nothing
     set_main_leaf_left(&mut o, &w, !left);
     assert_eq!(main_leaf_left(&o, &w), !left);
+}
+
+#[test]
+fn the_handle_of_a_glazed_leaf_sits_on_its_stile() {
+    let (_, _, o, w) = door(glazed(1, 1, 2), 90.0);
+    let boxes = opening_boxes(&o, &w);
+    let glass: Vec<_> = boxes.iter().filter(|b| b.part == Part::Glass).collect();
+    for h in boxes.iter().filter(|b| b.part == Part::Handle) {
+        // the rose, not the lever: it is the narrow plate on the leaf's face
+        if h.hi.x - h.lo.x > 0.06 {
+            continue;
+        }
+        for g in &glass {
+            let over = h.lo.x < g.hi.x && g.lo.x < h.hi.x;
+            assert!(!over, "handle {h:?} over glass {g:?}");
+        }
+    }
 }

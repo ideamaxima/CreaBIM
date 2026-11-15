@@ -370,6 +370,8 @@ How a door or window is built inside its opening.
 | `panes_up` | integer | default `1` | Window panes one above the other. |
 | `leaves` | integer | default `1` | A door's leaves: 1, or 2 meeting between the jambs. |
 | `main_leaf` | number | default `0.0` | With two leaves, the main one's width; 0 for two the same. |
+| `glazed` | boolean | default `false` | A door's leaves glazed: a frame round glass split into panes. |
+| `leaf_frame` | number | default `0.1` | A glazed leaf's stiles and top rail; its bottom rail is twice it. |
 
 ### Rect
 

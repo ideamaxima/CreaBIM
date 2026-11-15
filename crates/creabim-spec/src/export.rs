@@ -652,6 +652,8 @@ fn frame(fr: &core::OpeningFrame) -> f::Frame {
         panes_up: fr.panes_up,
         leaves: fr.leaves,
         main_leaf: fr.main_leaf,
+        glazed: fr.glazed,
+        leaf_frame: fr.leaf_frame,
     }
 }
 

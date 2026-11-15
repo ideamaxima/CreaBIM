@@ -31,6 +31,26 @@ pub(super) fn leaves_fields(ui: &mut egui::Ui, frame: &mut creabim_core::Opening
     changed
 }
 
+/// A door's glazing: glass in its leaves, the width of the leaf frame
+/// round it, and the panes the glass is split into. True when any changed.
+pub(super) fn glazing_fields(ui: &mut egui::Ui, frame: &mut creabim_core::OpeningFrame) -> bool {
+    let mut changed = crate::props::row(ui, "Glazed", |ui| {
+        ui.checkbox(&mut frame.glazed, "Glass in the leaves")
+            .changed()
+    });
+    if frame.glazed {
+        changed |= num(ui, "Leaf frame", &mut frame.leaf_frame, 0.02, 0.5);
+        let panes = |ui: &mut egui::Ui, text: &str, v: &mut u32| {
+            crate::props::row(ui, text, |ui| {
+                crate::props::fill(ui, egui::DragValue::new(v).range(1..=12)).changed()
+            })
+        };
+        changed |= panes(ui, "Panes across", &mut frame.panes_across);
+        changed |= panes(ui, "Panes up", &mut frame.panes_up);
+    }
+    changed
+}
+
 /// The model's levels, lowest first.
 fn levels(model: &Model) -> Vec<(ElementId, String, f64)> {
     let mut v: Vec<_> = model
@@ -324,6 +344,9 @@ pub(super) fn opening_fields(ui: &mut egui::Ui, model: &Model, o: &mut Opening) 
                         }
                     })
                 });
+            }
+            if glazing_fields(ui, &mut o.frame) {
+                label = "Door glazing";
             }
             crate::props::row(ui, "Swing angle", |ui| {
                 if crate::props::fill(

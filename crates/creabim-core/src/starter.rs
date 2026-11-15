@@ -375,6 +375,8 @@ fn materials_and_types(b: &mut Builder) {
                 panes_up: up,
                 leaves: 1,
                 main_leaf: 0.0,
+                glazed: false,
+                leaf_frame: 0.1,
             },
             material: frames,
         })

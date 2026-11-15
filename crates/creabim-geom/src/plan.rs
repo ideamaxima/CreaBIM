@@ -2118,7 +2118,8 @@ fn opening_symbol(
             Part::Frame if cut || (o.kind == OpeningKind::Window && b.lo.z <= 1e-9) => {
                 rect(&mut out, u0, u1, b.lo.y, b.hi.y)
             }
-            Part::Glass if cut => {
+            // a door's glass is in its leaf, drawn open on its own
+            Part::Glass if cut && o.kind != OpeningKind::Door => {
                 let s = (b.lo.y + b.hi.y) / 2.0;
                 line(&mut out, at(u0, s), at(u1, s));
             }
@@ -2145,9 +2146,23 @@ fn opening_symbol(
             }
         }
         OpeningKind::Door => {
-            let mut leaves: Vec<&crate::opening::PartBox> =
-                boxes.iter().filter(|b| b.part == Part::Leaf).collect();
-            leaves.sort_by(|a, b| a.lo.x.total_cmp(&b.lo.x));
+            // each leaf whole: a glazed one is many pieces touching
+            let mut pieces: Vec<crate::opening::PartBox> = boxes
+                .iter()
+                .filter(|b| b.part == Part::Leaf)
+                .copied()
+                .collect();
+            pieces.sort_by(|a, b| a.lo.x.total_cmp(&b.lo.x));
+            let mut leaves: Vec<crate::opening::PartBox> = vec![];
+            for p in pieces {
+                match leaves.last_mut() {
+                    Some(l) if p.lo.x <= l.hi.x + 1e-6 => {
+                        l.lo = l.lo.min(p.lo);
+                        l.hi = l.hi.max(p.hi);
+                    }
+                    _ => leaves.push(p),
+                }
+            }
             // each leaf turned open by the swing angle about its hinge on
             // the face of the frame on the side it opens to, and the arc it
             // sweeps: one leaf hinged by its hand, two at their own jambs

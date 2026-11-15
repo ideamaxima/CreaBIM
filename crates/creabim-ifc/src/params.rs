@@ -215,6 +215,10 @@ pub(crate) fn type_props(t: &ElementType) -> Vec<(&'static str, Prop)> {
                 out.push(("Leaves", Prop::Count(o.frame.leaves as i64)));
                 out.push(("MainLeaf", Prop::Length(o.frame.main_leaf)));
             }
+            if o.frame.glazed {
+                out.push(("Glazed", Prop::Bool(true)));
+                out.push(("LeafFrame", Prop::Length(o.frame.leaf_frame)));
+            }
         }
         TypeParams::Slab(s) | TypeParams::Roof(s) => {
             out.push(("Thickness", Prop::Length(s.thickness)));
@@ -315,6 +319,8 @@ pub(crate) fn type_from(category: TypeCategory, curtain: bool, p: &Props) -> Typ
                     panes_up: count("PanesUp"),
                     leaves: count("Leaves").clamp(1, 2),
                     main_leaf: len(p, "MainLeaf").filter(|v| *v > 0.0).unwrap_or(0.0),
+                    glazed: len(p, "Glazed").is_some_and(|v| v > 0.5),
+                    leaf_frame: l("LeafFrame", d.leaf_frame),
                 },
                 material: None,
             };

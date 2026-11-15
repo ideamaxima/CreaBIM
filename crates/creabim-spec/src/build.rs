@@ -618,6 +618,8 @@ fn frame(c: &Ctx, fr: &f::Frame) -> core::OpeningFrame {
         panes_up: fr.panes_up,
         leaves: fr.leaves,
         main_leaf: c.l(fr.main_leaf),
+        glazed: fr.glazed,
+        leaf_frame: c.l(fr.leaf_frame),
     }
 }
 
