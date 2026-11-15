@@ -91,6 +91,7 @@ Issue and pull request numbers refer to the upstream repository.
   large it was left.
 
 ### Fixed
+- A door or window next to a wall joined at the corner now stops right at that wall's face, whether the joined wall was drawn to its centre, to its face or through it (it stopped half a wall short, or could run into it).
 - Two CreaBIM windows open at once no longer undo each other's settings: each saves only what it changed (a 3D mouse's axis speeds were lost this way). The activity log now notes when CreaBIM closes.
 - A broken shape in 3D no longer closes the app when the pointer passes over it: its bad triangles are left out and the activity log names it (BAD MESH).
 - Walls drawn on a face and snapped face to face now join as one corner even when nearly in line, and follow each other when one is dragged; a wall ending nearly along another no longer shoots out metres past it.
