@@ -368,6 +368,8 @@ How a door or window is built inside its opening.
 | `depth` | number | default `0.1` | Depth of the frame through the wall. |
 | `panes_across` | integer | default `1` | Window panes side by side. |
 | `panes_up` | integer | default `1` | Window panes one above the other. |
+| `leaves` | integer | default `1` | A door's leaves: 1, or 2 meeting between the jambs. |
+| `main_leaf` | number | default `0.0` | With two leaves, the main one's width; 0 for two the same. |
 
 ### Rect
 
@@ -512,6 +514,7 @@ A door, window or bare hole in a wall, placed by its distance along the wall fro
 | `frame` | [Frame](#frame) |  |  |
 | `flip_hand` | boolean | default `false` | A door hinged on the jamb at the wall's end side. |
 | `flip_facing` | boolean | default `false` | A door opening to the wall's exterior; a window facing its interior. |
+| `swing_angle` | number | default `90.0` | How far a door's leaves open, in degrees. |
 
 ### Slab
 

@@ -2145,38 +2145,59 @@ fn opening_symbol(
             }
         }
         OpeningKind::Door => {
-            let Some(leaf) = boxes.iter().find(|b| b.part == Part::Leaf) else {
-                return out;
-            };
-            // the leaf turned open about its hinge on the face of the frame
-            // on the side it opens to, and the quarter circle it sweeps
+            let mut leaves: Vec<&crate::opening::PartBox> =
+                boxes.iter().filter(|b| b.part == Part::Leaf).collect();
+            leaves.sort_by(|a, b| a.lo.x.total_cmp(&b.lo.x));
+            // each leaf turned open by the swing angle about its hinge on
+            // the face of the frame on the side it opens to, and the arc it
+            // sweeps: one leaf hinged by its hand, two at their own jambs
             let left = o.faces_left(w);
             let side = if left { 1.0 } else { -1.0 };
-            let s = if left { leaf.hi.y } else { leaf.lo.y };
-            let r = leaf.hi.x - leaf.lo.x;
-            let (u, towards) = if o.flip_hand {
-                (c.u0 + leaf.hi.x, -1.0)
-            } else {
-                (c.u0 + leaf.lo.x, 1.0)
-            };
-            rect(&mut out, u, u + towards * f.leaf(), s, s + side * r);
-            let hinge = at(u, s);
-            let closed = at(u + towards, s) - hinge;
-            let open = at(u, s + side) - hinge;
-            // arcs run anticlockwise: from whichever of the two comes first
-            let a0 = if closed.perp_dot(open) > 0.0 {
-                closed.to_angle()
-            } else {
-                open.to_angle()
-            };
-            out.push(PlanItem::Arc {
-                id,
-                pen: Pen::Symbol,
-                center: hinge,
-                radius: r,
-                start: a0,
-                end: a0 + std::f64::consts::FRAC_PI_2,
-            });
+            let turn = o.swing_angle.clamp(1.0, 180.0).to_radians();
+            let two = leaves.len() > 1;
+            for (k, leaf) in leaves.iter().enumerate() {
+                let s = if left { leaf.hi.y } else { leaf.lo.y };
+                let r = leaf.hi.x - leaf.lo.x;
+                let at_lo = if two { k == 0 } else { !o.flip_hand };
+                let (u, towards) = if at_lo {
+                    (c.u0 + leaf.lo.x, 1.0)
+                } else {
+                    (c.u0 + leaf.hi.x, -1.0)
+                };
+                // along the open leaf, and across it into its thickness,
+                // in (along the wall, across it)
+                let (du, ds) = (towards * turn.cos(), side * turn.sin());
+                let (tu, ts) = (towards * turn.sin(), -side * turn.cos());
+                let lt = f.leaf();
+                out.push(PlanItem::Polygon {
+                    id,
+                    pen: Pen::Symbol,
+                    points: vec![
+                        at(u, s),
+                        at(u + du * r, s + ds * r),
+                        at(u + du * r + tu * lt, s + ds * r + ts * lt),
+                        at(u + tu * lt, s + ts * lt),
+                    ],
+                });
+                let hinge = at(u, s);
+                let closed = at(u + towards, s) - hinge;
+                let open = at(u + du, s + ds) - hinge;
+                let square = at(u, s + side) - hinge;
+                // arcs run anticlockwise: from whichever end comes first
+                let a0 = if closed.perp_dot(square) > 0.0 {
+                    closed.to_angle()
+                } else {
+                    open.to_angle()
+                };
+                out.push(PlanItem::Arc {
+                    id,
+                    pen: Pen::Symbol,
+                    center: hinge,
+                    radius: r,
+                    start: a0,
+                    end: a0 + turn,
+                });
+            }
         }
     }
     out
@@ -2709,6 +2730,7 @@ mod tests {
                 frame: Default::default(),
                 flip_hand: false,
                 flip_facing: false,
+                swing_angle: 90.0,
             }),
         );
         let hole = duct.id;

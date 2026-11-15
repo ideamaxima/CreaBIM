@@ -616,6 +616,8 @@ fn frame(c: &Ctx, fr: &f::Frame) -> core::OpeningFrame {
         depth: c.l(fr.depth),
         panes_across: fr.panes_across,
         panes_up: fr.panes_up,
+        leaves: fr.leaves,
+        main_leaf: c.l(fr.main_leaf),
     }
 }
 
@@ -903,6 +905,7 @@ fn opening(c: &mut Ctx, o: &f::Opening, at: &Path) {
         frame: Default::default(),
         flip_hand: o.flip_hand,
         flip_facing: o.flip_facing,
+        swing_angle: o.swing_angle,
     };
     let mut e = Element::new(name_of(&o.name, &o.id), ElementKind::Opening(opening));
     let typed = match o.kind {

@@ -14,6 +14,23 @@ fn num(ui: &mut egui::Ui, text: &str, v: &mut f64, lo: f64, hi: f64) -> bool {
     })
 }
 
+/// A door's leaves: one or two, and with two the main one's width (0 for
+/// two the same). True when either changed.
+pub(super) fn leaves_fields(ui: &mut egui::Ui, frame: &mut creabim_core::OpeningFrame) -> bool {
+    let mut changed = crate::props::row(ui, "Leaves", |ui| {
+        crate::props::fill(ui, egui::DragValue::new(&mut frame.leaves).range(1..=2)).changed()
+    });
+    if frame.leaves > 1 {
+        changed |= num(ui, "Main leaf", &mut frame.main_leaf, 0.0, 10.0);
+        ui.label(
+            egui::RichText::new("The main leaf's width out of the door's, as 0.90 + 0.50 on a 1.40 door; 0 makes the two the same.")
+                .weak()
+                .small(),
+        );
+    }
+    changed
+}
+
 /// The model's levels, lowest first.
 fn levels(model: &Model) -> Vec<(ElementId, String, f64)> {
     let mut v: Vec<_> = model
@@ -266,8 +283,13 @@ pub(super) fn opening_fields(ui: &mut egui::Ui, model: &Model, o: &mut Opening) 
             crate::props::row(ui, "Flip", |ui| {
                 crate::props::flow(ui, |ui| {
                     let w = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
+                    // two leaves the same have no hand to flip
+                    let even = o.frame.leaves > 1 && o.frame.main_leaf <= 1e-9;
                     if ui
-                        .add_sized([w, 22.0], egui::Button::new("Hand"))
+                        .add_enabled_ui(!even, |ui| {
+                            ui.add_sized([w, 22.0], egui::Button::new("Hand"))
+                        })
+                        .inner
                         .on_hover_text("Hinge it on the other jamb (Shift+Space).")
                         .clicked()
                     {
@@ -283,6 +305,22 @@ pub(super) fn opening_fields(ui: &mut egui::Ui, model: &Model, o: &mut Opening) 
                         label = "Flip door swing"
                     }
                 })
+            });
+            if leaves_fields(ui, &mut o.frame) {
+                label = "Door leaves";
+            }
+            crate::props::row(ui, "Swing angle", |ui| {
+                if crate::props::fill(
+                    ui,
+                    egui::DragValue::new(&mut o.swing_angle)
+                        .range(10.0..=180.0)
+                        .speed(1.0)
+                        .suffix("°"),
+                )
+                .changed()
+                {
+                    label = "Door swing angle";
+                }
             });
         }
         OpeningKind::Window => {

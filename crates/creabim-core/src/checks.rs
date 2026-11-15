@@ -68,18 +68,23 @@ fn zones(model: &Model, o: &Opening, w: &Wall) -> Zones {
                 at(u0, side * t),
             ],
         ));
-        // the leaf's sweep: a quarter circle about its hinge
-        let (hinge_u, towards) = if o.flip_hand { (u1, -1.0) } else { (u0, 1.0) };
-        let hinge = at(hinge_u, side * t);
-        let along = d * towards;
-        let out = n * side;
-        let r = o.width;
-        let mut sweep = vec![hinge];
-        for i in 0..=8 {
-            let a = std::f64::consts::FRAC_PI_2 * i as f64 / 8.0;
-            sweep.push(hinge + (along * a.cos() + out * a.sin()) * r);
+        // each leaf's sweep: an arc of the swing angle about its hinge, the
+        // main leaf hinged by the door's hand, a second at the other jamb
+        let widths = o.frame.leaf_widths(o.width, o.width);
+        let turn = o.swing_angle.clamp(1.0, 180.0).to_radians();
+        let main = if o.flip_hand { (u1, -1.0) } else { (u0, 1.0) };
+        let leaves = [main, (u0 + u1 - main.0, -main.1)];
+        for (&(hinge_u, towards), &r) in leaves.iter().zip(&widths) {
+            let hinge = at(hinge_u, side * t);
+            let along = d * towards;
+            let out = n * side;
+            let mut sweep = vec![hinge];
+            for i in 0..=8 {
+                let a = turn * i as f64 / 8.0;
+                sweep.push(hinge + (along * a.cos() + out * a.sin()) * r);
+            }
+            parts.push((Blocks::Swing, sweep));
         }
-        parts.push((Blocks::Swing, sweep));
     } else {
         // and a sliver in front of each face: what is fixed to the wall there
         let t = t + FACE;
@@ -441,6 +446,57 @@ pub fn clear_spot(u: f64, span: (f64, f64), blocked: &[(f64, f64)], len: f64) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The swing zones of a 1.4 m door in a straight wall.
+    fn swings(leaves: u32, swing_angle: f64) -> Vec<Vec<DVec2>> {
+        let mut m = Model::default();
+        let l = crate::Element::new(
+            "L0",
+            crate::ElementKind::Level(crate::Level {
+                elevation: 0.0,
+                height: 3.0,
+            }),
+        );
+        let w = Wall::new(l.id, DVec2::ZERO, DVec2::new(6.0, 0.0), 0.2, 3.0);
+        m.insert(l).unwrap();
+        let o = Opening {
+            host: crate::ElementId::new(),
+            kind: OpeningKind::Door,
+            offset: 2.0,
+            sill: 0.0,
+            width: 1.4,
+            height: 2.1,
+            material: None,
+            frame: crate::OpeningFrame {
+                leaves,
+                ..Default::default()
+            },
+            flip_hand: false,
+            flip_facing: false,
+            swing_angle,
+        };
+        zones(&m, &o, &w)
+            .parts
+            .into_iter()
+            .filter(|(b, _)| *b == Blocks::Swing)
+            .map(|(_, p)| p)
+            .collect()
+    }
+
+    #[test]
+    fn each_leaf_keeps_its_own_sweep_clear_to_its_swing_angle() {
+        assert_eq!(swings(1, 90.0).len(), 1);
+        let two = swings(2, 90.0);
+        assert_eq!(two.len(), 2);
+        // each half as wide as the door: 0.7 from its hinge
+        for z in &two {
+            assert!((z[0].distance(z[1]) - 0.7).abs() < 1e-9);
+        }
+        // opened 45°: the far edge of the sweep lies at 45° from the wall
+        let z = &swings(1, 45.0)[0];
+        let edge = *z.last().unwrap() - z[0];
+        assert!((edge.y.atan2(edge.x).abs() - std::f64::consts::FRAC_PI_4).abs() < 1e-9);
+    }
 
     #[test]
     fn walls_lying_along_each_other_are_found_and_neighbours_are_not() {

@@ -650,6 +650,8 @@ fn frame(fr: &core::OpeningFrame) -> f::Frame {
         depth: fr.depth,
         panes_across: fr.panes_across,
         panes_up: fr.panes_up,
+        leaves: fr.leaves,
+        main_leaf: fr.main_leaf,
     }
 }
 
@@ -809,6 +811,7 @@ fn opening(e: &Element, id: &str, o: &core::Opening, ids: &Ids) -> f::Opening {
         frame: (own(e, Param::Frame) && (typed || !o.frame.is_default())).then(|| frame(&o.frame)),
         flip_hand: o.flip_hand,
         flip_facing: o.flip_facing,
+        swing_angle: o.swing_angle,
     }
 }
 
