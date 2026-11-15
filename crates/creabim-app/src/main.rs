@@ -103,11 +103,14 @@ fn main() -> eframe::Result {
         })),
         ..Default::default()
     };
-    eframe::run_native(
+    let r = eframe::run_native(
         "CreaBIM",
         options,
         Box::new(|cc| Ok(Box::new(app::CreaBimApp::new(cc)))),
-    )
+    );
+    // a start with no close after it was a crash, or is still open
+    actlog::line("=== CreaBIM closed ===");
+    r
 }
 
 /// The web panes are GTK child windows of an X11 window, so on Wayland the
