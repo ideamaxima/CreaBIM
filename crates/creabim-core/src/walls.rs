@@ -535,11 +535,22 @@ pub fn clear_span(model: &Model, wall_id: ElementId) -> (f64, f64) {
             let on = (v.start + dir * t).distance(p) < v.thickness / 2.0 + 0.02;
             ends || on
         };
+        // where this wall's centreline crosses the other's: its end may
+        // stop on the other's face, or run on into it, rather than meet
+        // its centreline
+        let cross = (v.start - w.start).perp_dot(dir) / along.perp_dot(dir);
+        let slack = v.thickness + w.thickness;
         if near(w.start) {
-            lo = lo.max(reach);
+            let at = if cross.abs() <= slack { cross } else { 0.0 };
+            lo = lo.max(at + reach);
         }
         if near(w.end) {
-            hi = hi.min(len - reach);
+            let at = if (cross - len).abs() <= slack {
+                cross
+            } else {
+                len
+            };
+            hi = hi.min(at - reach);
         }
     }
     if hi - lo < 0.1 {
@@ -1036,5 +1047,65 @@ mod widen_tests {
         assert!(opening_crosses_join(&m, ElementId::new(), &o).is_some());
         let (m, _, o) = wall_and_door(1.0);
         assert!(opening_crosses_join(&m, ElementId::new(), &o).is_none());
+    }
+
+    /// A 0.2 m partition running off a 0.5 m wall at `angle` degrees,
+    /// starting `start` along its own line from the wall's centreline
+    /// (0.25 = on the wall's face, -0.25 = on its far face, run through it):
+    /// where an opening
+    /// in the partition may start.
+    fn partition_span(angle: f64, start: f64) -> f64 {
+        let mut m = Model::default();
+        let l = Element::new(
+            "L0",
+            ElementKind::Level(Level {
+                elevation: 0.0,
+                height: 3.0,
+            }),
+        );
+        let big = Element::new(
+            "Big",
+            ElementKind::Wall(Wall::new(
+                l.id,
+                DVec2::new(0.0, -5.0),
+                DVec2::new(0.0, 5.0),
+                0.5,
+                2.7,
+            )),
+        );
+        let d = DVec2::from_angle(angle.to_radians());
+        // the partition's start, `start` along it from the big wall's
+        // centreline, measured square to the wall
+        let from = d * (start / d.x);
+        let part = Element::new(
+            "P",
+            ElementKind::Wall(Wall::new(l.id, from, from + d * 4.0, 0.2, 2.7)),
+        );
+        let host = part.id;
+        Transaction::new("setup")
+            .insert(l)
+            .insert(big)
+            .insert(part)
+            .apply(&mut m)
+            .unwrap();
+        // back to the big wall's centreline, along the partition
+        clear_span(&m, host).0 + start / d.x
+    }
+
+    #[test]
+    fn an_opening_stops_at_the_face_however_the_partition_was_drawn() {
+        // square: the face is 0.25 from the centreline, plus nothing
+        for start in [0.0, 0.25, -0.25] {
+            let from_centre = partition_span(0.0, start);
+            assert!((from_centre - 0.25).abs() < 1e-9, "{start}: {from_centre}");
+        }
+        // a sharp angle: the same stop wherever the partition starts
+        let s = [0.0, 0.25, -0.25].map(|start| partition_span(50.0, start));
+        assert!(
+            (s[0] - s[1]).abs() < 1e-9 && (s[1] - s[2]).abs() < 1e-9,
+            "{s:?}"
+        );
+        // and past the face on both of the partition's faces
+        assert!(s[0] > 0.25 / 50f64.to_radians().cos());
     }
 }
