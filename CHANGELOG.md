@@ -23,6 +23,7 @@ Issue and pull request numbers refer to the upstream repository.
   aside); the Sets window says so in red as you type.
 
 ### Added
+- Crashes are kept for good in `crashes.log`, next to the activity log, with what led up to each; a session that ended without closing (a crash that left no trace) is reported at the next start; problem reports include the last 20 crashes.
 - Save and load a reusable structure of Sets and folders from the Sets window.
 - Drawn shapes take **holes**: *Cut a hole* in Properties, then a rectangle drawn on the shape cuts a hole inside it or bites it across its edge (splitting it if it cuts through); holes are left out of the area, edited with Tab and removed in Properties. Their **area and perimeter** can be written on the drawing with a switch beside each: a label that follows the shape, moves freely and can be written by hand in its Properties.
 - A drawn rectangle stays a rectangle: its corner grips resize it (the opposite corner stays, also when turned) and its side grips push a side; Width and Height are in Properties, and *Convert to polyline* frees its corners.
