@@ -39,6 +39,7 @@ mod planview;
 mod props;
 mod render3d;
 mod roomtool;
+mod scenecheck;
 mod schedulepane;
 mod selection;
 mod sheetview;

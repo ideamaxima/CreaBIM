@@ -50,6 +50,7 @@ pub fn is_problem(line: &str) -> bool {
         || l.contains("failed")
         || l.contains("not changed")
         || l.contains("panicked")
+        || l.contains("bad mesh")
         || l.contains("slow:")
 }
 
