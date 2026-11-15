@@ -282,21 +282,75 @@ impl Default for Settings {
 
 impl Settings {
     pub fn load() -> Self {
-        settings_dir()
+        let s: Self = settings_dir()
             .and_then(|d| std::fs::read_to_string(d.join("settings.json")).ok())
             .and_then(|t| serde_json::from_str(&t).ok())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        *SEEN.lock().unwrap_or_else(|e| e.into_inner()) = serde_json::to_value(&s).ok();
+        s
     }
 
+    /// Save what this window changed since it last read or saved the
+    /// settings, over what is in the file now: another CreaBIM open at the
+    /// same time keeps what it saved meanwhile (a 3D mouse's speeds lost
+    /// to a window opened before they were set).
     pub fn store(&self) {
         // tests change settings without touching the user's own
         if cfg!(test) {
             return;
         }
-        if let Some(dir) = settings_dir() {
-            let _ = std::fs::create_dir_all(&dir);
-            if let Ok(t) = serde_json::to_string_pretty(self) {
-                let _ = std::fs::write(dir.join("settings.json"), t);
+        let Some(dir) = settings_dir() else {
+            return;
+        };
+        let mut seen = SEEN.lock().unwrap_or_else(|e| e.into_inner());
+        let _ = std::fs::create_dir_all(&dir);
+        if let Some(now) = self.store_in(&dir.join("settings.json"), seen.as_ref()) {
+            *seen = Some(now);
+        }
+    }
+
+    /// [`Settings::store`] into `file`, given what was `seen` last: what
+    /// these settings are now, once written.
+    fn store_in(&self, file: &Path, seen: Option<&serde_json::Value>) -> Option<serde_json::Value> {
+        let now = serde_json::to_value(self).ok()?;
+        let on_disk = std::fs::read_to_string(file)
+            .ok()
+            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok());
+        let out = match (on_disk, seen) {
+            (Some(mut disk), Some(seen)) => {
+                merge_changes(&mut disk, seen, &now);
+                disk
+            }
+            _ => now.clone(),
+        };
+        let t = serde_json::to_string_pretty(&out).ok()?;
+        std::fs::write(file, t).ok()?;
+        Some(now)
+    }
+}
+
+/// The settings as this window last read or saved them.
+static SEEN: std::sync::Mutex<Option<serde_json::Value>> = std::sync::Mutex::new(None);
+
+/// Put into `disk` what changed from `seen` to `now`, key by key inside
+/// groups; a list counts as one value.
+fn merge_changes(disk: &mut serde_json::Value, seen: &serde_json::Value, now: &serde_json::Value) {
+    use serde_json::Value;
+    match (disk, seen, now) {
+        (Value::Object(d), Value::Object(s), Value::Object(n)) => {
+            for (k, v) in n {
+                match (d.get_mut(k), s.get(k)) {
+                    (Some(dv), Some(sv)) => merge_changes(dv, sv, v),
+                    (_, Some(sv)) if sv == v => {}
+                    _ => {
+                        d.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+        }
+        (d, s, n) => {
+            if s != n {
+                *d = n.clone();
             }
         }
     }
@@ -379,6 +433,48 @@ pub fn pick_save(current: &str, title: &str, ext: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use super::Settings;
+
+    #[test]
+    fn two_windows_saving_keep_each_others_changes() {
+        let dir =
+            std::env::temp_dir().join(format!("creabim-settings-merge-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("settings.json");
+        let _ = std::fs::remove_file(&file);
+        let first = Settings::default();
+        let seen = first.store_in(&file, None).unwrap();
+        // both windows opened on the same settings
+        let (mut a, mut b) = (first.clone(), first.clone());
+        let (seen_a, seen_b) = (seen.clone(), seen);
+        a.spacemouse.axes[0].speed = 220.0;
+        a.store_in(&file, Some(&seen_a)).unwrap();
+        b.left_width = 500.0;
+        b.store_in(&file, Some(&seen_b)).unwrap();
+        let saved: Settings =
+            serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(saved.spacemouse.axes[0].speed, 220.0);
+        assert_eq!(saved.left_width, 500.0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn without_a_file_everything_is_written() {
+        let dir = std::env::temp_dir().join(format!("creabim-settings-new-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("settings.json");
+        let _ = std::fs::remove_file(&file);
+        let s = Settings {
+            left_width: 321.0,
+            ..Settings::default()
+        };
+        s.store_in(&file, None).unwrap();
+        let saved: Settings =
+            serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(saved, s);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     use super::*;
 
     #[test]
