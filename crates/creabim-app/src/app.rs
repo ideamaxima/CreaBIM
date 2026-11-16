@@ -11415,6 +11415,7 @@ impl eframe::App for CreaBimApp {
             // a placing tool just picked opens its Next tab; a first
             // selection opens Element; otherwise the tab stays
             let now = (self.plan.tool, self.selection.active.is_some());
+            let deselected = self.prop_seen.1 && !now.1;
             if now != self.prop_seen {
                 if now.0 != self.prop_seen.0 && now.0 != Tool::Select && !now.1 {
                     self.prop_tab = PropTab::Next;
@@ -11426,11 +11427,19 @@ impl eframe::App for CreaBimApp {
             // the view in front leads, as Blender's editors do (MU40: a
             // sheet's settings showed over the Masters view)
             let front = self.areas.root.areas().get(self.areas.focus).copied();
-            if front != self.prop_front {
+            if front != self.prop_front || deselected {
                 match front {
                     Some(crate::areas::Shows::Masters) => self.prop_tab = PropTab::Master,
                     Some(crate::areas::Shows::Profiles) => self.prop_tab = PropTab::Profile,
                     Some(crate::areas::Shows::Log) => self.prop_tab = PropTab::Log,
+                    Some(crate::areas::Shows::Model) if !now.1 && now.0 == Tool::Select => {
+                        self.prop_tab = PropTab::Model3d;
+                    }
+                    Some(crate::areas::Shows::View(_))
+                        if !now.1 && now.0 == Tool::Select && tabs.contains(&PropTab::View) =>
+                    {
+                        self.prop_tab = PropTab::View;
+                    }
                     _ => {}
                 }
                 self.prop_front = front;

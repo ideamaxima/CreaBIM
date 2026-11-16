@@ -187,8 +187,7 @@ fn name_combo(
 }
 
 /// A small square of a pattern, as it draws at 1:`scale`.
-fn pattern_preview(ui: &mut egui::Ui, p: &HatchPattern, scale: f64) {
-    let size = 64.0;
+fn pattern_preview(ui: &mut egui::Ui, p: &HatchPattern, scale: f64, size: f32) {
     let (r, painter) = ui.allocate_painter(egui::vec2(size, size), egui::Sense::hover());
     let rect = r.rect;
     let fill = p.fill.map_or([1.0; 3], |c| c.0);
@@ -815,6 +814,7 @@ impl CreaBimApp {
             .default_pos(area.min + Vec2::new(40.0, 64.0))
             .default_size(Vec2::new(940.0, 560.0))
             .constrain_to(area)
+            .resizable([true, true])
             .collapsible(false)
             .show(ctx, |ui| {
                 ui.label(
@@ -876,7 +876,7 @@ impl CreaBimApp {
                     }
                 });
                 ui.separator();
-                egui::ScrollArea::both().max_height(420.0).show(ui, |ui| match self.gstyles.page {
+                egui::ScrollArea::both().max_height(ui.available_height().max(160.0)).auto_shrink([false, false]).show(ui, |ui| match self.gstyles.page {
                     Page::Objects => {
                         if objects_page(ui, &mut pack) {
                             label = "Object style";
@@ -1170,7 +1170,7 @@ fn patterns_page(ui: &mut egui::Ui, pack: &mut StylePack, pick: &mut usize) -> b
     ui.columns(2, |cols| {
         for (i, p) in pack.patterns.iter().enumerate() {
             cols[0].horizontal(|ui| {
-                pattern_preview(ui, p, 100.0);
+                pattern_preview(ui, p, 100.0, 128.0);
                 if ui.selectable_label(*pick == i, &p.name).clicked() {
                     *pick = i;
                 }
@@ -1274,7 +1274,7 @@ fn patterns_page(ui: &mut egui::Ui, pack: &mut StylePack, pick: &mut usize) -> b
             });
             changed = true;
         }
-        pattern_preview(ui, p, 50.0);
+        pattern_preview(ui, p, 50.0, 256.0);
         if delete {
             pack.patterns.remove(*pick);
             *pick = 0;
