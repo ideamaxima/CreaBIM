@@ -28,6 +28,7 @@ Issue and pull request numbers refer to the upstream repository.
   aside); the Sets window says so in red as you type.
 
 ### Added
+- Properties shows the selected element's full Set paths, or "No set", without opening the Sets menu.
 - Glazed doors: a door type (or door) can have glass in its leaves, in a frame of the width you set (*Leaf frame*) and split into panes by *Panes across* and *Panes up*, each leaf on its own; the handle sits on the stile. Panes no longer show for plain doors, where they did nothing.
 - Double doors: a door type can have two leaves, the same or of different widths (*Leaves*, *Main leaf*), drawn as two leaves and two arcs in plan, two leaves in 3D, "Double" in schedules and a double door in IFC; *Main leaf side* (Left / Right, seen from the side it opens to) puts the main leaf and its handle on either side, even with two leaves the same.
 - A door's *Swing angle* in Properties (0° shut to 90°, 90° unless set): its leaves and arcs in plan, and the check for objects in its way, open that far — for a door that can't open fully against a wall.
