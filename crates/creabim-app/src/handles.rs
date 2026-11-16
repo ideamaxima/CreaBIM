@@ -26,6 +26,8 @@ use creabim_core::{
 use eframe::egui::{self, Color32, Painter, Pos2, Rect, Stroke, Vec2};
 use glam::{DVec2, DVec3};
 
+mod section;
+
 /// A pointer ray in model space.
 #[derive(Clone, Copy, Debug)]
 pub struct Ray {
@@ -126,6 +128,10 @@ pub enum HandleKind {
     },
     /// How far a section or elevation sees, from its line.
     ViewDepth,
+    /// A side of the section extent, sliding along the cut line.
+    ViewSide {
+        end: bool,
+    },
     /// Face `i` of a crop box (see [`creabim_core::CropBox::face`]).
     CropFace(usize),
     /// A crop box as a whole, across the plan.
@@ -271,6 +277,7 @@ impl HandleKind {
             HandleKind::OpeningSill => "Change sill of",
             HandleKind::Face(_) => "Push/pull",
             HandleKind::ViewDepth => "Change depth of",
+            HandleKind::ViewSide { .. } => "Change width of",
             HandleKind::CropFace(_) => "Resize",
             HandleKind::CropMove
             | HandleKind::RefMove
@@ -316,6 +323,7 @@ impl HandleKind {
             HandleKind::Member { .. } => "Point",
             HandleKind::ViewEnd { .. } => "Line end",
             HandleKind::ViewDepth => "Depth",
+            HandleKind::ViewSide { .. } => "Side: resize",
             HandleKind::CropFace(_) => "Crop face",
             HandleKind::CropMove => "Crop box: move",
             HandleKind::RefMove => "Reference: move",
@@ -376,6 +384,8 @@ impl HandleKind {
             HandleKind::MeshMove => "Drag: move the mass across the plan",
             HandleKind::MeshLift => "Drag: move the mass up or down",
             HandleKind::ViewDepth => "Drag: change how deep it sees",
+            HandleKind::ViewSide { .. } => "Drag: shorten or lengthen without turning the section",
+            HandleKind::ViewEnd { .. } => "Drag: move the end · Shift: keep orthogonal",
             HandleKind::CropFace(_) => "Drag: move the crop face",
             HandleKind::RefMove => "Drag: move the reference",
             HandleKind::RefScale(_) => "Drag: scale it about its middle (Calibrate in Properties sets an exact size)",
@@ -990,18 +1000,7 @@ pub fn handles(model: &Model, id: ElementId, face: Option<usize>) -> Vec<Handle>
         ElementKind::View(v) => match v.kind {
             ViewKind::Section {
                 start, end, depth, ..
-            } => {
-                let look = (end - start).normalize_or_zero().perp();
-                vec![
-                    flat(HandleKind::ViewEnd { end: false }, start.extend(0.0)),
-                    flat(HandleKind::ViewEnd { end: true }, end.extend(0.0)),
-                    line(
-                        HandleKind::ViewDepth,
-                        ((start + end) / 2.0 + look * depth).extend(0.0),
-                        look.extend(0.0),
-                    ),
-                ]
-            }
+            } => section::grips(start, end, depth),
             _ => vec![],
         },
         ElementKind::CropBox(c) => {
@@ -1674,6 +1673,9 @@ pub fn apply(
                     return Err("a view line needs some length".into());
                 }
             }
+        }
+        (ElementKind::View(v), HandleKind::ViewSide { end }) => {
+            section::resize(&mut v.kind, end, d)?;
         }
         (ElementKind::View(v), HandleKind::ViewDepth) => {
             if let ViewKind::Section {
@@ -4323,6 +4325,7 @@ pub fn interact(
     } else {
         now
     };
+    let now = section::orthogonal(d.kind, d.edit.originals().first(), now, shift, input.look);
     crate::actlog::line(format!(
         "drag frame: pane {} | pointer ({:.1}, {:.1}) px | free {} | snap {} | used {} | step {} mm | frame {:.1} ms",
         pane_name(input),
