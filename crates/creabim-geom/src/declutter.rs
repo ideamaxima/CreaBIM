@@ -384,9 +384,9 @@ fn is_own_mark(item: &PlanItem) -> bool {
     matches!(item, PlanItem::Tag { .. } | PlanItem::Annotation { .. })
 }
 
-/// Move an item's text by `d`. Moved `far`, a note gets a leader to
-/// where its text was and a plain label a line back to it; a tag keeps
-/// its own leader to what it tags.
+/// Move an item's text by `d`. Moved `far`, a plain label gets a line
+/// back to where it was. Notes and tags keep their existing leaders;
+/// moving a note must respect its disabled Leader setting.
 fn shift(
     item: &mut PlanItem,
     d: DVec2,
@@ -409,11 +409,8 @@ fn shift(
         }
         PlanItem::Tag { at, .. } => *at += d,
         PlanItem::Annotation { item, .. } => {
-            if let Shape::Note { at, leader, .. } = &mut item.shape {
+            if let Shape::Note { at, .. } = &mut item.shape {
                 *at += d;
-                if far && leader.is_none() {
-                    *leader = Some(was);
-                }
             }
         }
         _ => {}
@@ -472,6 +469,9 @@ pub fn overlapping_labels(items: &[PlanItem], mm: f64) -> Vec<(usize, usize)> {
     }
     out
 }
+
+#[cfg(test)]
+mod note_leader_tests;
 
 #[cfg(test)]
 mod tests {
