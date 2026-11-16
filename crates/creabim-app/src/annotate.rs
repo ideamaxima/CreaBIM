@@ -1345,20 +1345,23 @@ pub fn style_ui(ui: &mut egui::Ui, s: &mut TextStyle) -> Option<&'static str> {
             label = Some("Text size");
         }
     });
-    crate::props::flow(ui, |ui| {
-        let mut own = s.color.is_some();
-        if crate::props::switch(ui, &mut own, "Colour")
-            .on_hover_text("Off: black on paper, blue on screen")
-            .changed()
-        {
-            s.color = own.then_some([0.0, 0.0, 0.0]);
-            label = Some("Text colour");
-        }
-        if let Some(c) = &mut s.color {
-            if crate::colourpick::srgb_button(ui, c).changed() {
+    crate::props::row(ui, "Colour", |ui| {
+        ui.horizontal(|ui| {
+            let mut own = s.color.is_some();
+            if ui
+                .checkbox(&mut own, "")
+                .on_hover_text("Off: black on paper, blue on screen")
+                .changed()
+            {
+                s.color = own.then_some([0.0, 0.0, 0.0]);
                 label = Some("Text colour");
             }
-        }
+            if let Some(c) = &mut s.color {
+                if crate::colourpick::srgb_button(ui, c).changed() {
+                    label = Some("Text colour");
+                }
+            }
+        });
     });
     // Blender's rows (MU31): toggles in the field column, then how the
     // lines line up
