@@ -1234,6 +1234,7 @@ impl CreaBimApp {
                 }
             }
         }
+        crate::spacemouse::paper::navigate(ui, response.hovered(), fit, &mut center, &mut scale);
         // Ctrl + middle-drag zooms about where the drag began, as in the
         // drawings (MU40); otherwise right or middle drag pans
         let ctrl_zoom =

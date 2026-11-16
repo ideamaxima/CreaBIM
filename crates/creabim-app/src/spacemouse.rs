@@ -5,6 +5,8 @@
 
 use std::sync::{Mutex, OnceLock};
 
+pub mod paper;
+
 /// What one of the cap's six motions does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Action {
