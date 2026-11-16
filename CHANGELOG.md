@@ -9,6 +9,8 @@ Issue and pull request numbers refer to the upstream repository.
 ## [Unreleased]
 
 ### Changed
+- Pattern previews are larger in both the list and the detail panel of Graphic styles.
+- The Graphic styles window can grow vertically, with its content using the available height.
 - CreaBIM opens on an empty project with the New project window, which now
   lists the recent projects (name and folder, full path on hover), opens
   any other file with Open…, and takes a project off the list with ×.
@@ -97,6 +99,7 @@ Issue and pull request numbers refer to the upstream repository.
   large it was left.
 
 ### Fixed
+- Properties follows the active drawing or 3D workspace when switching views or deselecting an object.
 - A door or window next to a wall joined at the corner now stops right at that wall's face, whether the joined wall was drawn to its centre, to its face or through it (it stopped half a wall short, or could run into it).
 - Two CreaBIM windows open at once no longer undo each other's settings: each saves only what it changed (a 3D mouse's axis speeds were lost this way). The activity log now notes when CreaBIM closes.
 - A broken shape in 3D no longer closes the app when the pointer passes over it: its bad triangles are left out and the activity log names it (BAD MESH).
