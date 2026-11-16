@@ -100,6 +100,7 @@ Issue and pull request numbers refer to the upstream repository.
   large it was left.
 
 ### Fixed
+- Section views have side grips to shorten or lengthen their extent without turning; Shift keeps endpoint drags horizontal or vertical.
 - The 3D mouse now pans and zooms Master views, and its left button fits the sheet.
 - Properties follows the active drawing or 3D workspace when switching views or deselecting an object.
 - A door or window next to a wall joined at the corner now stops right at that wall's face, whether the joined wall was drawn to its centre, to its face or through it (it stopped half a wall short, or could run into it).
