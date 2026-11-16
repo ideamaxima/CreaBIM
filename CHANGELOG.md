@@ -100,6 +100,7 @@ Issue and pull request numbers refer to the upstream repository.
   large it was left.
 
 ### Fixed
+- Text style colour controls stay together on one row, aligned with the other fields in Properties.
 - Section views have side grips to shorten or lengthen their extent without turning; Shift keeps endpoint drags horizontal or vertical.
 - The 3D mouse now pans and zooms Master views, and its left button fits the sheet.
 - Properties follows the active drawing or 3D workspace when switching views or deselecting an object.
