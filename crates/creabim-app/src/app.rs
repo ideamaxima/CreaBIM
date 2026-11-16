@@ -10370,6 +10370,7 @@ impl CreaBimApp {
                 self.mark_inline(ui, id, w);
             });
         }
+        crate::props::set_membership::show(ui, self.doc.model(), &e);
         self.mark_warning(ui, id);
         ui.add_space(2.0);
         // its actions, under its name (brief 02, 2.7)
