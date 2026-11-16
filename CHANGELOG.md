@@ -99,6 +99,7 @@ Issue and pull request numbers refer to the upstream repository.
   large it was left.
 
 ### Fixed
+- The 3D mouse now pans and zooms Master views, and its left button fits the sheet.
 - Properties follows the active drawing or 3D workspace when switching views or deselecting an object.
 - A door or window next to a wall joined at the corner now stops right at that wall's face, whether the joined wall was drawn to its centre, to its face or through it (it stopped half a wall short, or could run into it).
 - Two CreaBIM windows open at once no longer undo each other's settings: each saves only what it changed (a 3D mouse's axis speeds were lost this way). The activity log now notes when CreaBIM closes.
